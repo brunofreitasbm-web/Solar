@@ -1,9 +1,5 @@
 import streamlit as st
 
-from paginas import (
-    composicao_pg, configuracoes_pg, dashboard_pg, nova_usina_pg, rateio_pg, revisao_pg, simulador_pg, unidades_pg, upload_pg,
-    vencimentos_pg,
-)
 from solar import backup, configuracoes
 
 st.set_page_config(
@@ -31,24 +27,75 @@ with st.sidebar:
     st.markdown("### ☀️ Solar ROI")
     st.caption("Gestão & Retorno Fotovoltaico")
 
+
+def _page_upload() -> None:
+    from paginas import upload_pg
+    upload_pg.render()
+
+
+def _page_revisao() -> None:
+    from paginas import revisao_pg
+    revisao_pg.render()
+
+
+def _page_rateio() -> None:
+    from paginas import rateio_pg
+    rateio_pg.render()
+
+
+def _page_dashboard() -> None:
+    from paginas import dashboard_pg
+    dashboard_pg.render()
+
+
+def _page_composicao() -> None:
+    from paginas import composicao_pg
+    composicao_pg.render()
+
+
+def _page_unidades() -> None:
+    from paginas import unidades_pg
+    unidades_pg.render()
+
+
+def _page_vencimentos() -> None:
+    from paginas import vencimentos_pg
+    vencimentos_pg.render()
+
+
+def _page_simulador() -> None:
+    from paginas import simulador_pg
+    simulador_pg.render()
+
+
+def _page_nova_usina() -> None:
+    from paginas import nova_usina_pg
+    nova_usina_pg.render()
+
+
+def _page_configuracoes() -> None:
+    from paginas import configuracoes_pg
+    configuracoes_pg.render()
+
+
 paginas = {
     "Operações": [
-        st.Page(upload_pg.render, title="Enviar faturas", icon=":material/upload_file:", url_path="enviar-faturas"),
-        st.Page(revisao_pg.render, title="Revisar leitura", icon=":material/fact_check:", url_path="revisar-leitura"),
-        st.Page(rateio_pg.render, title="Rateio de créditos", icon=":material/swap_horiz:", url_path="rateio-creditos"),
+        st.Page(_page_upload, title="Enviar faturas", icon=":material/upload_file:", url_path="enviar-faturas"),
+        st.Page(_page_revisao, title="Revisar leitura", icon=":material/fact_check:", url_path="revisar-leitura"),
+        st.Page(_page_rateio, title="Rateio de créditos", icon=":material/swap_horiz:", url_path="rateio-creditos"),
     ],
     "Visão Geral": [
-        st.Page(dashboard_pg.render, title="Dashboard", icon=":material/dashboard:", url_path="dashboard", default=True),
-        st.Page(composicao_pg.render, title="Composição da conta", icon=":material/pie_chart:", url_path="composicao-conta"),
-        st.Page(unidades_pg.render, title="Unidades", icon=":material/home:", url_path="unidades"),
-        st.Page(vencimentos_pg.render, title="Vencimentos", icon=":material/calendar_month:", url_path="vencimentos"),
+        st.Page(_page_dashboard, title="Dashboard", icon=":material/dashboard:", url_path="dashboard", default=True),
+        st.Page(_page_composicao, title="Composição da conta", icon=":material/pie_chart:", url_path="composicao-conta"),
+        st.Page(_page_unidades, title="Unidades", icon=":material/home:", url_path="unidades"),
+        st.Page(_page_vencimentos, title="Vencimentos", icon=":material/calendar_month:", url_path="vencimentos"),
     ],
     "Planejamento": [
-        st.Page(simulador_pg.render, title="Simulador", icon=":material/calculate:", url_path="simulador"),
-        st.Page(nova_usina_pg.render, title="Nova usina", icon=":material/solar_power:", url_path="nova-usina"),
+        st.Page(_page_simulador, title="Simulador", icon=":material/calculate:", url_path="simulador"),
+        st.Page(_page_nova_usina, title="Nova usina", icon=":material/solar_power:", url_path="nova-usina"),
     ],
     "Sistema": [
-        st.Page(configuracoes_pg.render, title="Configurações", icon=":material/settings:", url_path="configuracoes"),
+        st.Page(_page_configuracoes, title="Configurações", icon=":material/settings:", url_path="configuracoes"),
     ],
 }
 

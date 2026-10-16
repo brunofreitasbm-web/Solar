@@ -3,8 +3,6 @@
 import base64
 import json
 
-import anthropic
-
 from solar.config import MODELO_IA
 from solar.faturas.modelo import Fatura
 
@@ -50,6 +48,8 @@ class FalhaLeituraIA(Exception):
 
 
 def interpretar(pdf: bytes) -> Fatura:
+    import anthropic
+
     cliente = anthropic.Anthropic()
     try:
         resposta = cliente.beta.messages.create(

@@ -4,9 +4,6 @@ import time
 from pathlib import Path
 from typing import Callable
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from playwright.sync_api import sync_playwright
-
 from solar import config
 from solar.faturas.extracao import ResultadoExtracao, extrair
 from solar.faturas.importacao import salvar_se_completa
@@ -92,6 +89,8 @@ def _obter_contexto(p, headless: bool = False):
 def abrir_sessao_login() -> str:
     """Abre o navegador Chrome para o usuário se identificar na Equatorial.
     A sessão (cookies e tokens) fica gravada na pasta de perfil local para automações futuras."""
+    from playwright.sync_api import sync_playwright
+
     with sync_playwright() as p:
         context = _obter_contexto(p, headless=False)
         page = context.new_page()
@@ -128,6 +127,8 @@ def verificar_autenticado() -> bool:
     """Checa de forma rápida se a sessão atual ainda está válida."""
     if not PASTA_PERFIL.exists():
         return False
+    from playwright.sync_api import sync_playwright
+
     try:
         with sync_playwright() as p:
             context = _obter_contexto(p, headless=True)
@@ -155,6 +156,8 @@ def baixar_faturas_equatorial(
     arquivos_baixados: list[Path] = []
 
     _avisar("Iniciando navegador com perfil do usuário…")
+    from playwright.sync_api import sync_playwright
+
     with sync_playwright() as p:
         context = _obter_contexto(p, headless=headless)
         page = context.new_page()
