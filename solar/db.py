@@ -32,6 +32,26 @@ CREATE TABLE IF NOT EXISTS faturas (
     origem TEXT NOT NULL DEFAULT 'manual',
     UNIQUE (uc, mes_ref)
 );
+CREATE TABLE IF NOT EXISTS usinas_planejadas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    endereco TEXT NOT NULL DEFAULT '',
+    uc TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'Em instalação',
+    paineis INTEGER NOT NULL,
+    potencia_painel_w REAL NOT NULL,
+    inversor TEXT NOT NULL DEFAULT '',
+    potencia_inversor_kw REAL NOT NULL DEFAULT 0,
+    custo_total REAL,
+    valor_financiado REAL,
+    parcela_mensal REAL,
+    qtd_parcelas INTEGER,
+    data_operacao TEXT,
+    consumo_kwh_mes REAL,
+    simultaneidade REAL NOT NULL DEFAULT 0.4,
+    lat REAL,
+    lon REAL
+);
 CREATE TABLE IF NOT EXISTS config (
     chave TEXT PRIMARY KEY,
     valor TEXT NOT NULL

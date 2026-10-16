@@ -42,3 +42,6 @@ DISPONIBILIDADE_KWH = 100
 PASTA_BACKUP = RAIZ / "backups"
 BACKUPS_MANTIDOS = 12
 DIAS_ENTRE_BACKUPS_AUTOMATICOS = 7
+
+# Fio A e encargos que usinas novas (GD III) não compensam, além do Fio B
+DESCONTO_USINA_NOVA = 0.10

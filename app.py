@@ -1,7 +1,7 @@
 import streamlit as st
 
 from paginas import (
-    composicao_pg, configuracoes_pg, dashboard_pg, rateio_pg, revisao_pg, simulador_pg, unidades_pg, upload_pg,
+    composicao_pg, configuracoes_pg, dashboard_pg, nova_usina_pg, rateio_pg, revisao_pg, simulador_pg, unidades_pg, upload_pg,
     vencimentos_pg,
 )
 from solar import backup, configuracoes
@@ -16,6 +16,7 @@ PAGINAS = {
     "💸 Composição da conta": composicao_pg.render,
     "🔁 Rateio de créditos": rateio_pg.render,
     "🏦 Simulador": simulador_pg.render,
+    "🔆 Nova usina": nova_usina_pg.render,
     "📅 Vencimentos": vencimentos_pg.render,
     "⚙️ Configurações": configuracoes_pg.render,
 }

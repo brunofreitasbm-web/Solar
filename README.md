@@ -24,6 +24,7 @@ Os dados ficam só no seu PC: `data/solar.db` e `data/pdfs/` (fora do git). Opci
 | Composição da conta | Da conta sem usina até a conta real; quanto é Fio B, benefício, iluminação pública. |
 | Rateio de créditos | Percentuais sugeridos por usina para zerar consumo descoberto e crédito parado. |
 | Simulador | Quitação antecipada (juros × CDI) e ampliação da usina (VPL, TIR, payback). |
+| Nova usina | Usina em instalação: ficha técnica, geração esperada, destino da energia e retorno antes da 1ª fatura; vincula a UC quando ela chegar. |
 | Vencimentos | Próximos vencimentos, lembretes `.ics` para o calendário e custo dos atrasos. |
 | Configurações | Investimento, financiamento, tributos, backup e tarifa ANEEL do dia. |
 

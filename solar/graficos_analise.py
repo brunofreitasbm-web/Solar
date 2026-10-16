@@ -160,3 +160,19 @@ def grafico_quitacao(cenarios: pd.DataFrame, cdi_rs: pd.Series | None = None) ->
 
 def mes_legivel_ou_traco(mes: str | None) -> str:
     return mes_legivel(mes) if mes else "—"
+
+
+def grafico_geracao_prevista(base: list[float], rotulo_base: str, alternativa: list[float] | None = None,
+                             rotulo_alternativa: str = "") -> go.Figure:
+    """Geração mensal esperada da usina nova; a linha tracejada mostra a outra hipótese de rendimento."""
+    fig = go.Figure()
+    fig.add_bar(x=MESES_ABREV, y=base, name=rotulo_base, marker_color=COR_ECONOMIA,
+                text=[f"{v:,.0f}".replace(",", ".") for v in base], textposition="outside", textfont=dict(size=10, color=COR_TEXTO_MUTED),
+                hovertemplate="%{x}: %{y:,.0f} kWh<extra></extra>")
+    if alternativa:
+        fig.add_scatter(x=MESES_ABREV, y=alternativa, mode="lines+markers", name=rotulo_alternativa,
+                        line=dict(color=COR_INVESTIMENTO, width=2, dash="dot"), hovertemplate="%{x}: %{y:,.0f} kWh<extra></extra>")
+    fig.update_layout(**layout_base("Geração esperada por mês (kWh)", "a estação do ano vem da irradiação medida pela NASA e da curva das suas usinas"))
+    fig.update_yaxes(gridcolor=COR_GRADE, ticksuffix=" kWh", separatethousands=True, rangemode="tozero")
+    fig.update_xaxes(**eixo_x_categoria())
+    return fig

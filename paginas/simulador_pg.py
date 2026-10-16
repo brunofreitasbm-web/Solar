@@ -4,11 +4,10 @@ import pandas as pd
 import streamlit as st
 
 from paginas import painel_dados
-from solar import benchmarks, expansao, financiamento, geracao, graficos, graficos_analise
+from solar import ampliacao, benchmarks, config, expansao, financiamento, geracao, graficos, graficos_analise
 
 MODOS = {"Reduzir o prazo (mantém a parcela)": "prazo", "Reduzir a parcela (mantém o prazo)": "parcela"}
 VALORES_COMPARADOS = (5_000, 10_000, 20_000, 30_000, 50_000)
-DESCONTO_USINA_NOVA = 0.10  # Fio A e encargos que usinas novas (GD III) não compensam, além do Fio B
 
 
 def _equilibrio(p: painel_dados.Painel, sim: financiamento.Amortizacao | None = None) -> str | None:
@@ -106,7 +105,7 @@ def _expansao(p: painel_dados.Painel) -> None:
     st.subheader("Simular uma ampliação")
     kwp_atual = demanda.producao_kwh_mes / rendimento
     custo_padrao = cfg.investimento_total / kwp_atual if cfg.investimento_total else 4000.0
-    liquido_novo = (modelo.bruto_kwh - modelo.remanescente_kwh - modelo.fio_b_cheio_kwh) * (1 - DESCONTO_USINA_NOVA)
+    liquido_novo = ampliacao.valor_liquido_usina_nova(modelo)
     taxa_contrato = financiamento.taxa_mensal(cfg)
     cdi = benchmarks.cdi_anual_medio() or 0.13
 
@@ -121,7 +120,7 @@ def _expansao(p: painel_dados.Painel) -> None:
     with b:
         custo = st.number_input("Custo por kWp (R$)", min_value=500.0, value=float(round(custo_padrao, -1)), step=100.0)
         valor_kwh = st.number_input("Valor líquido do kWh compensado (R$)", min_value=0.05, value=float(round(liquido_novo, 3)), step=0.01, format="%.3f",
-                                    help=f"Tarifa cheia menos Fio B a 100% e benefício, com {DESCONTO_USINA_NOVA:.0%} a menos para Fio A e encargos que usinas novas (GD III) não compensam. Estimativa.")
+                                    help=f"Tarifa cheia menos Fio B a 100% e benefício, com {config.DESCONTO_USINA_NOVA:.0%} a menos para Fio A e encargos que usinas novas (GD III) não compensam. Estimativa.")
         desconto = st.number_input("Taxa de desconto (% a.a.)", min_value=0.0, value=round(cdi * 100, 1), step=0.5) / 100
     with c:
         financiar = st.checkbox("Financiar", value=False)
