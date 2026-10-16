@@ -12,10 +12,13 @@ class ResultadoExtracao:
 
 
 def _arquivar(nome: str, pdf: bytes) -> str:
+    """Salva com nome achatado (sem subpastas) — `nome` pode vir com separadores quando a
+    fatura foi lida de uma pasta organizada por endereço (ex.: "101/conta.pdf")."""
     PASTA_PDFS.mkdir(parents=True, exist_ok=True)
-    destino = PASTA_PDFS / nome
+    nome_achatado = nome.replace("/", "_").replace("\\", "_")
+    destino = PASTA_PDFS / nome_achatado
     destino.write_bytes(pdf)
-    return str(destino.name)
+    return destino.name
 
 
 def _faltando(fatura: Fatura) -> list[str]:

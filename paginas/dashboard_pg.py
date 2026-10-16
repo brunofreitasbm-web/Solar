@@ -53,14 +53,14 @@ def render() -> None:
     st.plotly_chart(
         px.bar(resumo, x="mes_ref", y="economia_rs", title="Economia mensal (R$)",
                labels={"mes_ref": "Mês", "economia_rs": "Economia (R$)"}),
-        use_container_width=True,
+        width="stretch",
     )
 
     if cfg.completo:
         st.plotly_chart(
             px.line(acumulado, x="mes_ref", y="saldo_rs", title="Saldo acumulado vs. investimento",
                     labels={"mes_ref": "Mês", "saldo_rs": "Saldo (R$)"}),
-            use_container_width=True,
+            width="stretch",
         )
 
         if cfg.parcela_mensal:
@@ -81,11 +81,19 @@ def render() -> None:
                 px.bar(fluxo, x="mes_ref", y=["economia_rs", "parcela_rs"], barmode="group",
                        title="Economia vs. parcela, mês a mês",
                        labels={"mes_ref": "Mês", "value": "R$", "variable": ""}),
-                use_container_width=True,
+                width="stretch",
             )
             termino = financiamento.mes_parcelas_termina(cfg)
             if termino:
                 st.caption(f"Parcelas até {termino} · total financiado R$ {cfg.valor_financiado:,.2f}")
+
+            if fluxo["saldo_liquido_acumulado_rs"].iloc[-1] < 0:
+                equilibrio = financiamento.mes_ponto_equilibrio(
+                    resumo, cfg, cfg.degradacao_anual, cfg.reajuste_tarifa_anual
+                )
+                if equilibrio:
+                    st.info(f"📅 Ponto de equilíbrio projetado — quando a economia acumulada finalmente "
+                             f"cobre todas as parcelas pagas até então — na tendência atual: **{equilibrio}**.")
 
         st.subheader("Comparação com renda fixa")
         comparativo = benchmarks.comparar_com_investimento(cfg.investimento_total, cfg.data_investimento, economia_total)
@@ -100,24 +108,24 @@ def render() -> None:
         st.plotly_chart(
             px.line(projecao, x="ano", y="roi_acumulado_pct", title="ROI acumulado projetado (%)",
                     labels={"ano": "Ano", "roi_acumulado_pct": "ROI acumulado (%)"}),
-            use_container_width=True,
+            width="stretch",
         )
 
     st.subheader("Saldo de créditos por unidade")
-    st.dataframe(creditos.saldo_por_unidade(df_faturas), use_container_width=True, hide_index=True)
+    st.dataframe(creditos.saldo_por_unidade(df_faturas), width="stretch", hide_index=True)
     st.caption(creditos.sugestao_rateio(creditos.saldo_por_unidade(df_faturas)))
 
     expirando = creditos.creditos_a_expirar(df_faturas)
     if not expirando.empty:
         st.warning("Créditos perto de expirar (validade de 60 meses):")
-        st.dataframe(expirando, use_container_width=True, hide_index=True)
+        st.dataframe(expirando, width="stretch", hide_index=True)
 
     geradoras = df_faturas[df_faturas["geradora"]]
     if not geradoras.empty:
         alertas = geracao.avaliar_geracao(geradoras, cfg.performance_ratio)
         if not alertas.empty:
             st.subheader("Geração real vs. esperada")
-            st.dataframe(alertas, use_container_width=True, hide_index=True)
+            st.dataframe(alertas, width="stretch", hide_index=True)
             baixas = alertas[alertas["alerta"]]
             if not baixas.empty:
                 st.warning(f"{len(baixas)} mês(es) com geração abaixo do esperado — "
