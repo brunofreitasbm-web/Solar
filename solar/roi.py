@@ -68,3 +68,34 @@ def projecao_25_anos(
         })
         economia_do_ano *= fator_liquido_anual
     return pd.DataFrame(linhas)
+
+
+def mes_payback_projetado(
+    resumo: pd.DataFrame,
+    investimento: float,
+    degradacao_anual: float = config.PADRAO_DEGRADACAO_ANUAL,
+    reajuste_tarifa_anual: float = config.PADRAO_REAJUSTE_TARIFA_ANUAL,
+    meses_base: int = 12,
+) -> str | None:
+    """Projeta o mês em que a economia acumulada alcança o investimento, partindo da
+    economia já realizada e usando a média dos últimos `meses_base` meses como base — mais
+    fiel ao regime atual da usina do que a média histórica completa (que inclui os
+    primeiros meses, normalmente mais baixos, de ativação do sistema)."""
+    if resumo.empty or investimento <= 0:
+        return None
+    ja_economizado = resumo["economia_rs"].sum()
+    if ja_economizado >= investimento:
+        return resumo["mes_ref"].iloc[0]
+
+    fator_mensal = ((1 + reajuste_tarifa_anual) / (1 + degradacao_anual)) ** (1 / 12)
+    economia_mes = resumo.tail(meses_base)["economia_rs"].mean()
+    mes_atual = pd.Period(resumo["mes_ref"].max())
+    acumulado = ja_economizado
+
+    for _ in range(600):  # 50 anos de margem de segurança
+        mes_atual += 1
+        acumulado += economia_mes
+        economia_mes *= fator_mensal
+        if acumulado >= investimento:
+            return str(mes_atual)
+    return None

@@ -40,6 +40,16 @@ def render() -> None:
     col3.metric("Mês de payback", payback or "ainda não atingido")
     col4.metric("TIR mensal", f"{tir * 100:.2f}%" if tir else "—")
 
+    if cfg.completo and not payback:
+        previsto = roi.mes_payback_projetado(
+            resumo, cfg.investimento_total, cfg.degradacao_anual, cfg.reajuste_tarifa_anual
+        )
+        if previsto:
+            falta = cfg.investimento_total - economia_total
+            st.info(f"📅 Na tendência dos últimos 12 meses (R$ {resumo.tail(12)['economia_rs'].mean():,.2f}/mês, "
+                     f"com reajuste de tarifa e degradação dos painéis), a economia acumulada deve alcançar o "
+                     f"investimento total em **{previsto}** — faltam R$ {falta:,.2f}.")
+
     st.plotly_chart(
         px.bar(resumo, x="mes_ref", y="economia_rs", title="Economia mensal (R$)",
                labels={"mes_ref": "Mês", "economia_rs": "Economia (R$)"}),
