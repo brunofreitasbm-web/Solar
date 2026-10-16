@@ -37,21 +37,41 @@ def render() -> None:
     previsoes = previsoes.assign(situacao=[_situacao(l) for l in previsoes.itertuples()])
     st.dataframe(
         previsoes, width="stretch", hide_index=True,
-        column_order=["unidade", "vencimento_previsto", "situacao", "ultima_fatura", "ultimo_vencimento"],
+        column_order=["unidade", "vencimento_previsto", "total_rs", "situacao", "ultima_fatura", "ultimo_vencimento"],
         column_config={
             "unidade": "Unidade",
             "vencimento_previsto": st.column_config.DateColumn("Vencimento previsto", format="DD/MM/YYYY"),
+            "total_rs": st.column_config.NumberColumn("Valor (R$)", format="R$ %.2f"),
             "situacao": "Situação",
             "ultima_fatura": "Última fatura carregada",
             "ultimo_vencimento": st.column_config.DateColumn("Último vencimento", format="DD/MM/YYYY"),
         },
         alt="Tabela com o próximo vencimento previsto de cada unidade",
     )
-    st.download_button(
-        "Baixar lembretes (.ics)", vencimentos.gerar_ics(previsoes, meses=6).encode("utf-8"),
-        file_name="vencimentos_solar.ics", mime="text/calendar", icon=":material/calendar_add_on:",
-        help="Importe no Google Agenda ou no Outlook: cria um evento por unidade nos próximos 6 meses, com aviso 3 dias e 1 dia antes.",
-    )
+
+    col_btn1, col_btn2 = st.columns([1, 1])
+    with col_btn1:
+        st.download_button(
+            "Baixar lembretes (.ics com cópia para Isabela)", vencimentos.gerar_ics(previsoes, meses=6).encode("utf-8"),
+            file_name="vencimentos_solar_com_pix.ics", mime="text/calendar", icon=":material/calendar_add_on:",
+            help="Importe no Google Agenda: cria eventos com aviso prévio, cópia para Isabela, valor e Chave Pix.",
+        )
+    with col_btn2:
+        st.caption(f"📅 Convidada automática nos eventos: `{vencimentos.EMAIL_ISABELA}`")
+
+    # Atalhos rápidos para adicionar cada fatura direto no Google Agenda com 1 clique
+    with st.expander("⚡ Adicionar direto no Google Agenda (1 clique com PIX e cópia para Isabela)", expanded=True):
+        for _, prev in previsoes.iterrows():
+            c1, c2, c3, c4 = st.columns([2, 1.5, 1.5, 2])
+            c1.write(f"**{prev['unidade']}**")
+            venc_fmt = prev['vencimento_previsto'].strftime('%d/%m/%Y') if hasattr(prev['vencimento_previsto'], 'strftime') else str(prev['vencimento_previsto'])
+            c2.write(f"📅 {venc_fmt}")
+            c3.write(f"💰 {graficos.rs(prev['total_rs'])}")
+            link_cal = vencimentos.link_google_agenda(prev)
+            c4.link_button("📅 Adicionar no Google Agenda", link_cal, help="Abre o Google Agenda pré-preenchido com valor, PIX e Isabela convidada")
+            if prev.get("pix_copia_cola"):
+                st.code(prev["pix_copia_cola"], language="text")
+
     st.caption("A data é prevista pelo ciclo de leitura da última fatura e pode variar alguns dias. Confira no site ou app da Equatorial.")
 
     st.subheader("Quanto os atrasos já custaram")

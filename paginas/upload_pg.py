@@ -75,8 +75,9 @@ def render() -> None:
         with col_opc2:
             modo_visivel = st.checkbox(
                 "Abrir janela visível do navegador", value=True,
-                help="Útil caso a Equatorial solicite confirmação visual de acesso ou captcha."
+                help="Necessário para contornar o firewall da Equatorial ou caso solicite confirmação de acesso."
             )
+        st.info(f"📁 **Google Drive integrado**: As faturas baixadas são copiadas automaticamente para `{equatorial.config.PASTA_GOOGLE_DRIVE}`.")
 
         if st.button("🚀 Baixar faturas recentes agora", type="primary"):
             status_box = st.empty()

@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 from pathlib import Path
 from typing import Callable
@@ -208,12 +209,36 @@ def baixar_faturas_equatorial(
                 download.save_as(str(caminho_final))
                 arquivos_baixados.append(caminho_final)
                 _avisar(f"Baixado: {nome_arquivo}")
+
+                # Coloca automaticamente no Google Drive
+                try:
+                    config.PASTA_GOOGLE_DRIVE.mkdir(parents=True, exist_ok=True)
+                    caminho_drive = config.PASTA_GOOGLE_DRIVE / nome_arquivo
+                    shutil.copy2(caminho_final, caminho_drive)
+                    _avisar(f"Copiado para o Google Drive: {nome_arquivo}")
+                except Exception as e_drive:
+                    _avisar(f"Aviso Google Drive: {e_drive}")
             except Exception:
                 continue
 
         context.close()
 
     return arquivos_baixados
+
+
+def sincronizar_com_google_drive(arquivos: list[Path] | None = None) -> int:
+    """Copia as faturas especificadas (ou todas as da pasta de downloads) para o Google Drive."""
+    config.PASTA_GOOGLE_DRIVE.mkdir(parents=True, exist_ok=True)
+    lista = arquivos or list(PASTA_DOWNLOADS.glob("*.pdf"))
+    copiados = 0
+    for arq in lista:
+        try:
+            destino = config.PASTA_GOOGLE_DRIVE / arq.name
+            shutil.copy2(arq, destino)
+            copiados += 1
+        except Exception:
+            continue
+    return copiados
 
 
 def processar_faturas_baixadas(arquivos: list[Path]) -> tuple[int, list[ResultadoExtracao]]:

@@ -39,6 +39,10 @@ class Fatura:
     # Percentual desta UC no rateio de cada geradora: {id da geradora (só dígitos): %}
     rateio: dict[str, float] = field(default_factory=dict)
 
+    # Pagamento
+    pix_copia_cola: str = ""
+    codigo_barras: str = ""
+
     @property
     def tem_geracao(self) -> bool:
         return self.injetado_kwh > 0

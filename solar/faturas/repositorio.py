@@ -11,6 +11,7 @@ COLUNAS_DB = (
     "credito_rs", "tarifa_kwh", "total_rs", "bandeira", "arquivo", "origem",
     "vencimento", "emissao", "proxima_leitura", "consumo_rs", "fio_b_rs", "beneficio_rs",
     "bandeira_rs", "cip_rs", "multa_rs", "juros_rs", "outros_rs",
+    "pix_copia_cola", "codigo_barras",
 )
 
 

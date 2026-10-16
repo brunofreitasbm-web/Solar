@@ -6,20 +6,12 @@ from paginas import (
 )
 from solar import backup, configuracoes
 
-st.set_page_config(page_title="Solar ROI", page_icon="☀️", layout="wide")
-
-PAGINAS = {
-    "📤 Enviar faturas": upload_pg.render,
-    "✅ Revisar leitura": revisao_pg.render,
-    "🏠 Unidades": unidades_pg.render,
-    "📊 Dashboard": dashboard_pg.render,
-    "💸 Composição da conta": composicao_pg.render,
-    "🔁 Rateio de créditos": rateio_pg.render,
-    "🏦 Simulador": simulador_pg.render,
-    "🔆 Nova usina": nova_usina_pg.render,
-    "📅 Vencimentos": vencimentos_pg.render,
-    "⚙️ Configurações": configuracoes_pg.render,
-}
+st.set_page_config(
+    page_title="Solar ROI",
+    page_icon="☀️",
+    layout="wide",
+    initial_sidebar_state="auto",
+)
 
 
 def _backup_automatico() -> None:
@@ -34,6 +26,31 @@ def _backup_automatico() -> None:
 
 
 _backup_automatico()
-st.sidebar.title("☀️ Solar ROI")
-pagina = st.sidebar.radio("Navegação", list(PAGINAS))
-PAGINAS[pagina]()
+
+with st.sidebar:
+    st.markdown("### ☀️ Solar ROI")
+    st.caption("Gestão & Retorno Fotovoltaico")
+
+paginas = {
+    "Operações": [
+        st.Page(upload_pg.render, title="Enviar faturas", icon=":material/upload_file:"),
+        st.Page(revisao_pg.render, title="Revisar leitura", icon=":material/fact_check:"),
+        st.Page(rateio_pg.render, title="Rateio de créditos", icon=":material/swap_horiz:"),
+    ],
+    "Visão Geral": [
+        st.Page(dashboard_pg.render, title="Dashboard", icon=":material/dashboard:"),
+        st.Page(composicao_pg.render, title="Composição da conta", icon=":material/pie_chart:"),
+        st.Page(unidades_pg.render, title="Unidades", icon=":material/home:"),
+        st.Page(vencimentos_pg.render, title="Vencimentos", icon=":material/calendar_month:"),
+    ],
+    "Planejamento": [
+        st.Page(simulador_pg.render, title="Simulador", icon=":material/calculate:"),
+        st.Page(nova_usina_pg.render, title="Nova usina", icon=":material/solar_power:"),
+    ],
+    "Sistema": [
+        st.Page(configuracoes_pg.render, title="Configurações", icon=":material/settings:"),
+    ],
+}
+
+nav = st.navigation(paginas, position="sidebar", expanded=True)
+nav.run()

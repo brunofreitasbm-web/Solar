@@ -84,3 +84,54 @@ def render() -> None:
     _aviso_sobra_das_prioritarias(r, prioridade)
     st.caption("Use o mesmo percentual em cada usina geradora (a soma de cada usina precisa fechar 100%). A mudança vale a partir "
                "do ciclo seguinte ao pedido. Os percentuais usam o consumo e a geração médios dos últimos 6 meses — revise se algo mudar.")
+
+    st.divider()
+    st.subheader("📄 Listas de Rateio oficiais prontas para envio à Equatorial")
+    st.caption("Arquivos gerados no formato oficial da Equatorial Pará, preenchidos com os dados cadastrais (contas contrato, classes e endereços) e os percentuais otimizados.")
+
+    from datetime import datetime
+    from solar import rateio_pdf
+
+    rateio_dict = {l.unidade: l.sugerido_pct for l in r.tabela.itertuples() if l.sugerido_pct > 0}
+    itens_formatados = rateio_pdf.montar_itens_rateio(rateio_dict)
+    hoje_str = datetime.now().strftime("%d/%m/%Y")
+
+    col_salinas, col_salvaterra = st.columns(2)
+    with col_salinas:
+        salinas_info = rateio_pdf.DADOS_UNIDADES["231236701340"]
+        caminho_salinas = rateio_pdf.desenhar_pdf_rateio(
+            caminho_saida="data/rateio/Lista_de_Rateio_Salinas.pdf",
+            conta_contrato_geradora=salinas_info["conta_contrato"],
+            local_solicitacao=salinas_info["municipio"],
+            data_solicitacao=hoje_str,
+            itens_rateio=itens_formatados,
+        )
+        st.download_button(
+            label="📥 Baixar Lista - Usina Salinas (PDF)",
+            data=caminho_salinas.read_bytes(),
+            file_name="Lista_de_Rateio_Salinas.pdf",
+            mime="application/pdf",
+            type="primary",
+            width="stretch",
+            help="Formulário preenchido com a Conta Contrato de Salinas (3032332055) e os percentuais de rateio.",
+        )
+
+    with col_salvaterra:
+        salvaterra_info = rateio_pdf.DADOS_UNIDADES["458420701358"]
+        caminho_salvaterra = rateio_pdf.desenhar_pdf_rateio(
+            caminho_saida="data/rateio/Lista_de_Rateio_Salvaterra.pdf",
+            conta_contrato_geradora=salvaterra_info["conta_contrato"],
+            local_solicitacao=salvaterra_info["municipio"],
+            data_solicitacao=hoje_str,
+            itens_rateio=itens_formatados,
+        )
+        st.download_button(
+            label="📥 Baixar Lista - Usina Salvaterra (PDF)",
+            data=caminho_salvaterra.read_bytes(),
+            file_name="Lista_de_Rateio_Salvaterra.pdf",
+            mime="application/pdf",
+            type="primary",
+            width="stretch",
+            help="Formulário preenchido com a Conta Contrato de Salvaterra (3033711769) e os percentuais de rateio.",
+        )
+

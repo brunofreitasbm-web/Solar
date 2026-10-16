@@ -8,6 +8,13 @@ import unicodedata
 
 import pdfplumber
 
+try:
+    import cv2
+    import numpy as np
+    TEM_CV2 = True
+except ImportError:
+    TEM_CV2 = False
+
 from solar.faturas.modelo import CAMPOS_OBRIGATORIOS, Fatura
 
 MESES_ABREV = {"JAN": 1, "FEV": 2, "MAR": 3, "ABR": 4, "MAI": 5, "JUN": 6,
@@ -172,7 +179,48 @@ def _rateio(texto: str) -> dict[str, float]:
     return {re.sub(r"\D", "", uc): numero_br(pct) for uc, pct in RE_PAR_RATEIO.findall(m.group(1))}
 
 
-def interpretar(texto_bruto: str) -> Fatura:
+RE_LINHA_DIGITAVEL = re.compile(r"(\d{5}\.\d{5}\s+\d{5}\.\d{6}\s+\d{5}\.\d{6}\s+\d\s+\d{14})")
+
+
+def extrair_pix_e_codigo_barras(pdf_bytes: bytes = b"", texto_bruto: str = "") -> tuple[str, str]:
+    """Extrai a linha digitável do boleto e o payload do PIX Copia e Cola."""
+    linha_digitavel = ""
+    pix_copia_cola = ""
+
+    if m := RE_LINHA_DIGITAVEL.search(texto_bruto):
+        linha_digitavel = m.group(1).strip()
+
+    if pdf_bytes and TEM_CV2:
+        try:
+            with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                p0 = pdf.pages[0]
+                if not linha_digitavel:
+                    texto_p0 = p0.extract_text() or ""
+                    if m := RE_LINHA_DIGITAVEL.search(texto_p0):
+                        linha_digitavel = m.group(1).strip()
+
+                cands = [i for i in p0.images if i.get("top", 0) > 650 and 50 < i.get("width", 0) < 120]
+                if cands:
+                    img_meta = cands[0]
+                    crop_box = (img_meta["x0"] - 3, img_meta["top"] - 3, img_meta["x1"] + 3, img_meta["bottom"] + 3)
+                    pil_img = p0.crop(crop_box).to_image(resolution=400).original
+                    np_img = np.array(pil_img.convert("RGB"))
+                    gray = cv2.cvtColor(np_img, cv2.COLOR_RGB2GRAY)
+                    bordered = cv2.copyMakeBorder(gray, 25, 25, 25, 25, cv2.BORDER_CONSTANT, value=255)
+                    detector = cv2.QRCodeDetector()
+                    val, _, _ = detector.detectAndDecode(bordered)
+                    if not val:
+                        _, thresh = cv2.threshold(bordered, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+                        val, _, _ = detector.detectAndDecode(thresh)
+                    if val and "pix" in val.lower():
+                        pix_copia_cola = val
+        except Exception:
+            pass
+
+    return pix_copia_cola, linha_digitavel
+
+
+def interpretar(texto_bruto: str, pdf_bytes: bytes = b"") -> Fatura:
     texto = normalizar(texto_bruto)
     mes_ref, total_rs, vencimento = _mes_total_vencimento(texto)
     compensado, credito = _compensacao(texto)
@@ -182,6 +230,7 @@ def interpretar(texto_bruto: str) -> Fatura:
 
     uc = _uc(texto)
     consumo = _consumo_kwh(texto)
+    pix_copia_cola, linha_digitavel = extrair_pix_e_codigo_barras(pdf_bytes, texto_bruto)
 
     fatura = Fatura(
         uc=uc or "",
@@ -200,6 +249,8 @@ def interpretar(texto_bruto: str) -> Fatura:
         emissao=_iso(_valor_texto(RE_EMISSAO, texto)),
         proxima_leitura=_iso(_valor_texto(RE_LEITURAS, texto)),
         rateio=_rateio(texto),
+        pix_copia_cola=pix_copia_cola,
+        codigo_barras=linha_digitavel,
         **_composicao(texto, total_rs),
     )
     campos_presentes = {"uc": uc, "mes_ref": mes_ref, "consumo_kwh": consumo, "total_rs": total_rs}

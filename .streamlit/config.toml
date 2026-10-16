@@ -1,0 +1,131 @@
+# Streamlit Clean Modern Theme configuration
+# CleanTech / Solar ROI Theme with Inter, Plus Jakarta Sans, and JetBrains Mono
+
+[theme]
+showWidgetBorder = true
+showSidebarBorder = true
+baseRadius = "8px"
+buttonRadius = "8px"
+font = "'Inter':https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+headingFont = "'Plus Jakarta Sans':https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@600;700&display=swap"
+codeFont = "'JetBrains Mono':https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap"
+codeFontSize = "0.875rem"
+baseFontSize = 15
+baseFontWeight = 400
+headingFontSizes = ["30px", "22px", "18px", "16px", "14px", "12px"]
+headingFontWeights = [700, 600, 600, 600, 500, 500]
+metricValueFontSize = "2rem"
+metricValueFontWeight = 700
+linkUnderline = false
+paddingTop = "1rem"
+paddingBottom = "2.5rem"
+
+[theme.light]
+primaryColor = "#0284C7"
+backgroundColor = "#F8FAFC"
+secondaryBackgroundColor = "#FFFFFF"
+codeBackgroundColor = "#F1F5F9"
+textColor = "#0F172A"
+linkColor = "#0284C7"
+borderColor = "#E2E8F0"
+codeTextColor = "#334155"
+greenColor = "#10B981"
+redColor = "#EF4444"
+yellowColor = "#F59E0B"
+orangeColor = "#EA580C"
+blueColor = "#0284C7"
+violetColor = "#8B5CF6"
+grayColor = "#64748B"
+chartCategoricalColors = [
+    "#0284C7",
+    "#10B981",
+    "#F59E0B",
+    "#8B5CF6",
+    "#EF4444",
+    "#06B6D4",
+    "#64748B",
+    "#EA580C",
+]
+chartSequentialColors = [
+    "#F0F9FF",
+    "#E0F2FE",
+    "#BAE6FD",
+    "#7DD3FC",
+    "#38BDF8",
+    "#0EA5E9",
+    "#0284C7",
+    "#0369A1",
+    "#075985",
+    "#0C4A6E",
+]
+dataframeBorderColor = "#E2E8F0"
+dataframeHeaderBackgroundColor = "#F1F5F9"
+dataframeHeaderTextColor = "#0F172A"
+
+[theme.dark]
+primaryColor = "#38BDF8"
+backgroundColor = "#0B0F19"
+secondaryBackgroundColor = "#111827"
+codeBackgroundColor = "#1E293B"
+textColor = "#F8FAFC"
+linkColor = "#38BDF8"
+borderColor = "#1F2937"
+codeTextColor = "#CBD5E1"
+greenColor = "#34D399"
+redColor = "#F87171"
+yellowColor = "#FBBF24"
+orangeColor = "#FB923C"
+blueColor = "#38BDF8"
+violetColor = "#A78BFA"
+grayColor = "#94A3B8"
+chartCategoricalColors = [
+    "#38BDF8",
+    "#34D399",
+    "#FBBF24",
+    "#A78BFA",
+    "#F87171",
+    "#22D3EE",
+    "#94A3B8",
+    "#FB923C",
+]
+chartSequentialColors = [
+    "#0C4A6E",
+    "#075985",
+    "#0369A1",
+    "#0284C7",
+    "#0EA5E9",
+    "#38BDF8",
+    "#7DD3FC",
+    "#BAE6FD",
+    "#E0F2FE",
+    "#F0F9FF",
+]
+dataframeBorderColor = "#1F2937"
+dataframeHeaderBackgroundColor = "#1E293B"
+dataframeHeaderTextColor = "#F8FAFC"
+
+[theme.sidebar]
+paddingTop = "0.75rem"
+paddingBottom = "1.5rem"
+
+[theme.light.sidebar]
+backgroundColor = "#F1F5F9"
+secondaryBackgroundColor = "#FFFFFF"
+codeBackgroundColor = "#E2E8F0"
+textColor = "#0F172A"
+borderColor = "#E2E8F0"
+primaryColor = "#0284C7"
+linkColor = "#0284C7"
+dataframeHeaderBackgroundColor = "#E2E8F0"
+dataframeBorderColor = "#E2E8F0"
+
+[theme.dark.sidebar]
+backgroundColor = "#070A12"
+secondaryBackgroundColor = "#111827"
+codeBackgroundColor = "#1F2937"
+textColor = "#F8FAFC"
+borderColor = "#1F2937"
+primaryColor = "#38BDF8"
+linkColor = "#38BDF8"
+dataframeHeaderBackgroundColor = "#111827"
+dataframeBorderColor = "#1F2937"

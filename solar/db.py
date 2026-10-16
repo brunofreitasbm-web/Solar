@@ -69,6 +69,7 @@ COLUNAS_FATURAS_NOVAS = (
     ("consumo_rs", "REAL"), ("fio_b_rs", "REAL"), ("beneficio_rs", "REAL"),
     ("bandeira_rs", "REAL"), ("cip_rs", "REAL"), ("multa_rs", "REAL"),
     ("juros_rs", "REAL"), ("outros_rs", "REAL"), ("rateio_json", "TEXT"),
+    ("pix_copia_cola", "TEXT"), ("codigo_barras", "TEXT"),
 )
 
 

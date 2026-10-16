@@ -45,3 +45,7 @@ DIAS_ENTRE_BACKUPS_AUTOMATICOS = 7
 
 # Fio A e encargos que usinas novas (GD III) não compensam, além do Fio B
 DESCONTO_USINA_NOVA = 0.10
+
+# Sincronização Google Drive e Notificações Google Agenda
+PASTA_GOOGLE_DRIVE = Path(r"C:\Users\bruno\Documents\Faturas de Energia Equatorial")
+EMAIL_ISABELA = "isabella.vgoncalves@gmail.com"

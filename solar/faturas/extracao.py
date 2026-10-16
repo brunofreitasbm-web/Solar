@@ -27,7 +27,7 @@ def _faltando(fatura: Fatura) -> list[str]:
 
 def extrair(nome_arquivo: str, pdf: bytes) -> ResultadoExtracao:
     try:
-        fatura = parser_equatorial.interpretar(parser_equatorial.extrair_texto(pdf))
+        fatura = parser_equatorial.interpretar(parser_equatorial.extrair_texto(pdf), pdf_bytes=pdf)
     except Exception:  # PDF corrompido ou escaneado sem texto: segue para a IA
         fatura = Fatura(campos_faltando=list(CAMPOS_OBRIGATORIOS))
     aviso = ""
