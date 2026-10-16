@@ -1,0 +1,8 @@
+streamlit
+pdfplumber
+anthropic
+pandas
+plotly
+numpy-financial
+requests
+pytest
