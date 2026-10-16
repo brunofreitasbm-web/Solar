@@ -35,12 +35,16 @@ def salvar(unidade: Unidade) -> None:
 
 
 def garantir(uc: str, endereco: str = "", geradora_sugerida: bool = False) -> None:
-    """Cria a UC na primeira fatura lida; nunca sobrescreve o que o usuário já marcou."""
+    """Cria a UC na primeira fatura lida. Se alguma fatura (deste ou de meses anteriores)
+    já mostrou geração própria, a unidade fica marcada como geradora — nunca rebaixa de
+    volta para "não geradora" automaticamente, pois isso só o usuário decide no app."""
     with conexao() as con:
         con.execute(
             "INSERT OR IGNORE INTO unidades (uc, endereco, geradora) VALUES (?, ?, ?)",
             (uc, endereco, int(geradora_sugerida)),
         )
+        if geradora_sugerida:
+            con.execute("UPDATE unidades SET geradora = 1 WHERE uc = ?", (uc,))
 
 
 def excluir(uc: str) -> None:

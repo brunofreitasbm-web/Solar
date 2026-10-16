@@ -15,6 +15,18 @@ def render() -> None:
     with col2:
         data_investimento = st.text_input("Data do investimento (AAAA-MM-DD)", value=cfg.data_investimento)
 
+    st.subheader("Financiamento (opcional)")
+    st.caption("Se parte do investimento foi financiado, informe a parcela para ver se a economia já está cobrindo-a.")
+    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+    with col_f1:
+        valor_financiado = st.number_input("Valor financiado (R$)", value=cfg.valor_financiado, min_value=0.0)
+    with col_f2:
+        parcela_mensal = st.number_input("Parcela mensal (R$)", value=cfg.parcela_mensal, min_value=0.0)
+    with col_f3:
+        qtd_parcelas = st.number_input("Quantidade de parcelas", value=cfg.qtd_parcelas, min_value=0, step=1)
+    with col_f4:
+        data_primeira_parcela = st.text_input("1ª parcela (AAAA-MM-DD)", value=cfg.data_primeira_parcela)
+
     st.subheader("Tributos e projeção")
     col3, col4, col5 = st.columns(3)
     with col3:
@@ -35,6 +47,8 @@ def render() -> None:
     if st.button("Salvar configurações", type="primary"):
         configuracoes.salvar(configuracoes.Configuracoes(
             investimento_total=investimento, data_investimento=data_investimento,
+            valor_financiado=valor_financiado, parcela_mensal=parcela_mensal,
+            qtd_parcelas=int(qtd_parcelas), data_primeira_parcela=data_primeira_parcela,
             icms=icms, pis_cofins=pis_cofins, degradacao_anual=degradacao,
             reajuste_tarifa_anual=reajuste, performance_ratio=performance_ratio,
         ))

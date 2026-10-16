@@ -8,6 +8,10 @@ from solar.db import conexao
 class Configuracoes:
     investimento_total: float = 0.0
     data_investimento: str = ""
+    valor_financiado: float = 0.0
+    parcela_mensal: float = 0.0
+    qtd_parcelas: int = 0
+    data_primeira_parcela: str = ""
     icms: float = config.PADRAO_ICMS
     pis_cofins: float = config.PADRAO_PIS_COFINS
     degradacao_anual: float = config.PADRAO_DEGRADACAO_ANUAL
@@ -26,7 +30,12 @@ def carregar() -> Configuracoes:
     for campo in fields(Configuracoes):
         if campo.name in salvos:
             bruto = salvos[campo.name]
-            valores[campo.name] = float(bruto) if campo.type is float or campo.type == "float" else bruto
+            if campo.type is float or campo.type == "float":
+                valores[campo.name] = float(bruto)
+            elif campo.type is int or campo.type == "int":
+                valores[campo.name] = int(bruto)
+            else:
+                valores[campo.name] = bruto
     return Configuracoes(**valores)
 
 

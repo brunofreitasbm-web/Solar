@@ -1,7 +1,7 @@
 import plotly.express as px
 import streamlit as st
 
-from solar import benchmarks, configuracoes, creditos, economia, geracao, roi
+from solar import benchmarks, configuracoes, creditos, economia, financiamento, geracao, roi
 from solar.faturas import repositorio
 from solar.tarifa import aneel
 
@@ -52,6 +52,30 @@ def render() -> None:
                     labels={"mes_ref": "Mês", "saldo_rs": "Saldo (R$)"}),
             use_container_width=True,
         )
+
+        if cfg.parcela_mensal:
+            st.subheader("Financiamento: a economia está cobrindo a parcela?")
+            fluxo = financiamento.fluxo_com_financiamento(resumo, cfg)
+            meses_cobertos = (fluxo["saldo_liquido_rs"] >= 0) & (fluxo["parcela_rs"] > 0)
+            meses_financiados = fluxo["parcela_rs"] > 0
+            c1, c2, c3 = st.columns(3)
+            c1.metric("Parcela mensal", f"R$ {cfg.parcela_mensal:,.2f}")
+            c2.metric("Meses em que a economia cobriu a parcela",
+                      f"{meses_cobertos.sum()} de {meses_financiados.sum()}")
+            c3.metric("Saldo líquido acumulado (economia − parcelas)",
+                      f"R$ {fluxo['saldo_liquido_acumulado_rs'].iloc[-1]:,.2f}")
+            if fluxo["saldo_liquido_acumulado_rs"].iloc[-1] < 0:
+                st.warning("A economia ainda não cobre a parcela em nenhum mês — o financiamento está "
+                           "sendo pago com outra renda, não com a economia da usina.")
+            st.plotly_chart(
+                px.bar(fluxo, x="mes_ref", y=["economia_rs", "parcela_rs"], barmode="group",
+                       title="Economia vs. parcela, mês a mês",
+                       labels={"mes_ref": "Mês", "value": "R$", "variable": ""}),
+                use_container_width=True,
+            )
+            termino = financiamento.mes_parcelas_termina(cfg)
+            if termino:
+                st.caption(f"Parcelas até {termino} · total financiado R$ {cfg.valor_financiado:,.2f}")
 
         st.subheader("Comparação com renda fixa")
         comparativo = benchmarks.comparar_com_investimento(cfg.investimento_total, cfg.data_investimento, economia_total)
