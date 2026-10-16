@@ -10,27 +10,82 @@ from solar import config
 from solar.faturas.extracao import ResultadoExtracao, extrair
 from solar.faturas.importacao import salvar_se_completa
 
+import subprocess
+
 PASTA_PERFIL = config.PASTA_DADOS / "perfil_equatorial"
 PASTA_DOWNLOADS = config.PASTA_PDFS / "equatorial"
 URL_AGENCIA = "https://agenciavirtual.equatorialenergia.com.br/Login/"
 URL_SSO = "https://auth.equatorialenergia.com.br/"
 
 
+def _limpar_processos_residuais():
+    """Encerra processos órfãos do Chrome que possam estar retendo a pasta de perfil local."""
+    if os.name != "nt":
+        return
+    try:
+        caminho_esc = str(PASTA_PERFIL.resolve()).replace("\\", "\\\\")
+        ps_code = f"""
+        $procs = Get-CimInstance Win32_Process -Filter "Name = 'chrome.exe'"
+        foreach ($p in $procs) {{
+            if ($p.CommandLine -and $p.CommandLine.Contains("{caminho_esc}")) {{
+                Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+            }}
+        }}
+        """
+        subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_code],
+            capture_output=True,
+            timeout=8,
+            check=False,
+        )
+        time.sleep(0.5)
+    except Exception:
+        pass
+
+
 def _obter_contexto(p, headless: bool = False):
     """Cria ou recupera o contexto de navegador com perfil persistente para manter a sessão."""
     PASTA_PERFIL.mkdir(parents=True, exist_ok=True)
     PASTA_DOWNLOADS.mkdir(parents=True, exist_ok=True)
-    return p.chromium.launch_persistent_context(
-        user_data_dir=str(PASTA_PERFIL),
-        channel="chrome",
-        headless=headless,
-        accept_downloads=True,
-        args=[
-            "--disable-blink-features=AutomationControlled",
-            "--start-maximized",
-        ],
-        no_viewport=True,
-    )
+    _limpar_processos_residuais()
+
+    argumentos = [
+        "--disable-blink-features=AutomationControlled",
+        "--start-maximized",
+        "--disable-background-mode",
+        "--no-default-browser-check",
+        "--disable-session-crashed-bubble",
+    ]
+
+    try:
+        return p.chromium.launch_persistent_context(
+            user_data_dir=str(PASTA_PERFIL),
+            channel="chrome",
+            headless=headless,
+            accept_downloads=True,
+            args=argumentos,
+            no_viewport=True,
+        )
+    except Exception as e:
+        if "has been closed" in str(e) or "Target" in str(e):
+            # Tenta uma segunda vez limpando instâncias fantasmas residuais
+            _limpar_processos_residuais()
+            time.sleep(1)
+            try:
+                return p.chromium.launch_persistent_context(
+                    user_data_dir=str(PASTA_PERFIL),
+                    channel="chrome",
+                    headless=headless,
+                    accept_downloads=True,
+                    args=argumentos,
+                    no_viewport=True,
+                )
+            except Exception:
+                raise RuntimeError(
+                    "O Chrome foi encerrado inesperadamente ou já existe uma janela da Equatorial em execução. "
+                    "Feche as janelas abertas do Chrome ou processos em segundo plano e tente novamente."
+                ) from e
+        raise
 
 
 def abrir_sessao_login() -> str:
