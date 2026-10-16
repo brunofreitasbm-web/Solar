@@ -21,7 +21,7 @@ RE_UC = re.compile(r"(\d)\.(\d{3})\.(\d{3})\.(\d{3})-(\d{2})\s*\n?\s*HTTPS")
 # "<mês>/<ano> <vencimento> R$ <total> <emissão> AS <hora>" — aparece em toda fatura, logo
 # após o protocolo de autorização, nas duas variantes de layout.
 RE_CABECALHO = re.compile(
-    r"(\d{2})/(20\d{2})\s+\d{2}/\d{2}/\d{4}\s+R\$\s*(" + NUMERO_BR + r")\s+\d{2}/\d{2}/\d{4}\s+AS"
+    r"(\d{2})/(20\d{2})\s+(\d{2}/\d{2}/\d{4})\s+R\$\s*(" + NUMERO_BR + r")\s+\d{2}/\d{2}/\d{4}\s+AS"
 )
 
 RE_CONSUMO_LINHA = re.compile(
@@ -38,6 +38,26 @@ RE_CREDITO_LIQUIDO = re.compile(r"BENEFICIO TARIFARIO LIQUIDO SCEE\s+(" + NUMERO
 RE_SALDO_ACUMULADO = re.compile(r"SALDO ACUMULADO GERAL TOTAL:?\s*(" + NUMERO_BR + r")")
 RE_GERADORA = re.compile(r"ENERGIA INJETADA ATIVO TOTAL|ENERGIA ATIVA INJETADA \(KWH\)")
 RE_BANDEIRA = re.compile(r"\b(VERDE|AMARELA|VERMELHA(?:\s+PATAMAR\s*\d)?|ESCASSEZ HIDRICA)\s*:")
+RE_EMISSAO = re.compile(r"DATA DE EMISSAO:\s*(\d{2}/\d{2}/\d{4})")
+RE_LEITURAS = re.compile(r"\d{2}/\d{2}/\d{4}\s+\d{2}/\d{2}/\d{4}\s+\d{1,2}\s+(\d{2}/\d{2}/\d{4})")
+
+
+def _linha_6_colunas(nome: str) -> re.Pattern:
+    """Linhas de item: 'DESCRIÇÃO qtd tarifa tarifa pis icms valor' — o que interessa é o último."""
+    return re.compile(nome + r"\s+" + NUMERO_BR + r"(?:\s+" + NUMERO_BR + r"){4}\s+(" + NUMERO_BR + r")")
+
+
+RE_CONSUMO_RS = _linha_6_colunas(r"\bCONSUMO \(KWH\)")
+RE_DISPONIBILIDADE_RS = _linha_6_colunas(r"CUSTO DE DISPONIBILIDADE \(KWH\)")
+RE_FIO_B_RS = _linha_6_colunas(r"PARC\. INJ\. S/ DESC\. - GD2 \(KWH\)")
+RE_BENEFICIO_BRUTO = re.compile(r"BENEFICIO TARIFARIO BRUTO SCEE\s+" + NUMERO_BR + r"\s+" + NUMERO_BR + r"\s+(" + NUMERO_BR + r")")
+RE_BANDEIRA_RS = re.compile(r"ADICIONAL BANDEIRA\s+" + NUMERO_BR + r"\s+" + NUMERO_BR + r"\s+(" + NUMERO_BR + r")")
+RE_CIP = re.compile(r"CIP-ILUM PUB PREF MUNIC\s+(" + NUMERO_BR + r")")
+RE_MULTA = re.compile(r"\bMULTA\s+(" + NUMERO_BR + r")")
+RE_JUROS = re.compile(r"\bJUROS\s+(" + NUMERO_BR + r")")
+RE_CORRECAO = re.compile(r"CORRECAO MONETARIA\s+(" + NUMERO_BR + r")")
+RE_RATEIO = re.compile(r"DISTRIBUICAO PERCENTUAL DAS SEGUINTES UCS:\s*((?:[\d.\-]+\(\s*[\d,]+\s*%\)\s*,?\s*)+)")
+RE_PAR_RATEIO = re.compile(r"([\d.\-]+)\(\s*([\d,]+)\s*%\)")
 RE_ENDERECO = re.compile(r"CPF:.{0,20}\n(.{10,90})\nCEP:\s*(\d{5}-?\d{3})\s*-\s*([A-Z\s]+?)\s*-\s*([A-Z\s]+?)\s*-\s*PA")
 
 
@@ -60,12 +80,20 @@ def _uc(texto: str) -> str | None:
     return "".join(m.groups()) if m else None
 
 
-def _mes_e_total(texto: str) -> tuple[str | None, float | None]:
+def _iso(data_br: str | None) -> str:
+    """'26/06/2025' -> '2025-06-26'"""
+    if not data_br:
+        return ""
+    dia, mes, ano = data_br.split("/")
+    return f"{ano}-{mes}-{dia}"
+
+
+def _mes_total_vencimento(texto: str) -> tuple[str | None, float | None, str]:
     m = RE_CABECALHO.search(texto)
     if not m:
-        return None, None
-    mes, ano, total = m.groups()
-    return f"{ano}-{mes}", numero_br(total)
+        return None, None, ""
+    mes, ano, vencimento, total = m.groups()
+    return f"{ano}-{mes}", numero_br(total), _iso(vencimento)
 
 
 def _consumo_kwh(texto: str) -> float | None:
@@ -100,9 +128,53 @@ def _endereco(texto: str) -> str:
     return f"{rua} — {bairro}, {cidade}"
 
 
+def _valor(regex: re.Pattern, texto: str) -> float | None:
+    m = regex.search(texto)
+    return numero_br(m.group(1)) if m else None
+
+
+def _valor_texto(regex: re.Pattern, texto: str) -> str | None:
+    m = regex.search(texto)
+    return m.group(1) if m else None
+
+
+def _soma(regex: re.Pattern, texto: str) -> float | None:
+    achados = regex.findall(texto)
+    return sum(numero_br(a) for a in achados) if achados else None
+
+
+def _soma_opcional(*valores: float | None) -> float | None:
+    presentes = [v for v in valores if v is not None]
+    return sum(presentes) if presentes else None
+
+
+def _composicao(texto: str, total_rs: float | None) -> dict[str, float | None]:
+    """Quebra a conta nas linhas que a compõem; `outros_rs` fecha a diferença até o total."""
+    liquido = _valor(RE_CREDITO_LIQUIDO, texto)
+    itens = {
+        "consumo_rs": _soma_opcional(_valor(RE_CONSUMO_RS, texto), _valor(RE_DISPONIBILIDADE_RS, texto)),
+        "fio_b_rs": _valor(RE_FIO_B_RS, texto),
+        "beneficio_rs": _soma_opcional(_valor(RE_BENEFICIO_BRUTO, texto), liquido),
+        "bandeira_rs": _soma(RE_BANDEIRA_RS, texto),
+        "cip_rs": _valor(RE_CIP, texto),
+        "multa_rs": _valor(RE_MULTA, texto),
+        "juros_rs": _soma_opcional(_valor(RE_JUROS, texto), _valor(RE_CORRECAO, texto)),
+    }
+    itens = {k: round(v, 2) if v is not None else None for k, v in itens.items()}
+    itens["outros_rs"] = round(total_rs - sum(v for v in itens.values() if v is not None), 2) if total_rs is not None else None
+    return itens
+
+
+def _rateio(texto: str) -> dict[str, float]:
+    m = RE_RATEIO.search(texto)
+    if not m:
+        return {}
+    return {re.sub(r"\D", "", uc): numero_br(pct) for uc, pct in RE_PAR_RATEIO.findall(m.group(1))}
+
+
 def interpretar(texto_bruto: str) -> Fatura:
     texto = normalizar(texto_bruto)
-    mes_ref, total_rs = _mes_e_total(texto)
+    mes_ref, total_rs, vencimento = _mes_total_vencimento(texto)
     compensado, credito = _compensacao(texto)
     injetado = numero_br(m.group(1)) if (m := RE_INJETADO_TOTAL.search(texto)) else 0.0
     saldo = numero_br(m.group(1)) if (m := RE_SALDO_ACUMULADO.search(texto)) else 0.0
@@ -124,6 +196,11 @@ def interpretar(texto_bruto: str) -> Fatura:
         bandeira="/".join(dict.fromkeys(b.title() for b in bandeiras)),
         endereco=_endereco(texto),
         origem="parser",
+        vencimento=vencimento,
+        emissao=_iso(_valor_texto(RE_EMISSAO, texto)),
+        proxima_leitura=_iso(_valor_texto(RE_LEITURAS, texto)),
+        rateio=_rateio(texto),
+        **_composicao(texto, total_rs),
     )
     campos_presentes = {"uc": uc, "mes_ref": mes_ref, "consumo_kwh": consumo, "total_rs": total_rs}
     fatura.campos_faltando = [c for c in CAMPOS_OBRIGATORIOS if campos_presentes[c] is None]

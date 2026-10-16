@@ -34,3 +34,11 @@ FIO_B_APOS_2028 = 1.0
 
 VALIDADE_CREDITOS_MESES = 60
 LIMIAR_ALERTA_GERACAO = 0.80
+
+# Custo de disponibilidade (kWh/mês) cobrado mesmo com toda a energia compensada: 30 monofásico,
+# 50 bifásico, 100 trifásico. As unidades deste projeto são trifásicas.
+DISPONIBILIDADE_KWH = 100
+
+PASTA_BACKUP = RAIZ / "backups"
+BACKUPS_MANTIDOS = 12
+DIAS_ENTRE_BACKUPS_AUTOMATICOS = 7

@@ -43,6 +43,21 @@ CREATE TABLE IF NOT EXISTS cache_web (
 );
 """
 
+# Colunas acrescentadas depois da primeira versão — aplicadas por migração, sem apagar dados.
+COLUNAS_FATURAS_NOVAS = (
+    ("vencimento", "TEXT"), ("emissao", "TEXT"), ("proxima_leitura", "TEXT"),
+    ("consumo_rs", "REAL"), ("fio_b_rs", "REAL"), ("beneficio_rs", "REAL"),
+    ("bandeira_rs", "REAL"), ("cip_rs", "REAL"), ("multa_rs", "REAL"),
+    ("juros_rs", "REAL"), ("outros_rs", "REAL"), ("rateio_json", "TEXT"),
+)
+
+
+def _migrar(con: sqlite3.Connection) -> None:
+    existentes = {l["name"] for l in con.execute("PRAGMA table_info(faturas)")}
+    for nome, tipo in COLUNAS_FATURAS_NOVAS:
+        if nome not in existentes:
+            con.execute(f"ALTER TABLE faturas ADD COLUMN {nome} {tipo}")
+
 
 @contextmanager
 def conexao():
@@ -51,6 +66,7 @@ def conexao():
     con.row_factory = sqlite3.Row
     try:
         con.executescript(SCHEMA)
+        _migrar(con)
         yield con
         con.commit()
     finally:

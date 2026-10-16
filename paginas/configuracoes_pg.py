@@ -1,7 +1,52 @@
+from datetime import datetime
+from pathlib import Path
+
 import streamlit as st
 
-from solar import configuracoes
+from solar import backup, config, configuracoes
 from solar.tarifa import aneel
+
+
+def _bloco_backup(cfg: configuracoes.Configuracoes) -> str:
+    """Desenha a seção de backup e devolve a pasta digitada (salva junto com as configurações)."""
+    st.divider()
+    st.subheader("Backup")
+    st.caption(f"O app faz um backup do banco automaticamente a cada {config.DIAS_ENTRE_BACKUPS_AUTOMATICOS} dias e guarda os "
+               f"{config.BACKUPS_MANTIDOS} mais recentes. Aponte a pasta para o Google Drive, OneDrive ou Dropbox do seu PC "
+               "para a cópia sair do computador sozinha.")
+    pasta = st.text_input("Pasta dos backups", value=cfg.pasta_backup, placeholder=str(config.PASTA_BACKUP),
+                          help="Vazio usa a pasta 'backups' dentro do projeto. Salve as configurações para aplicar.")
+    incluir_pdfs = st.checkbox("Incluir os PDFs das faturas", value=False, help="Aumenta bastante o tamanho; o banco já guarda tudo o que foi lido.")
+
+    if st.button("Fazer backup agora", icon=":material/backup:"):
+        try:
+            arquivo = backup.fazer_backup(pasta or None, incluir_pdfs)
+            st.success(f"Backup salvo em {arquivo} ({arquivo.stat().st_size / 1024:,.0f} KB).")
+        except OSError as erro:
+            st.error(f"Não consegui salvar o backup nessa pasta: {erro}. Confira se ela existe e se você pode gravar nela.")
+
+    try:
+        existentes = backup.listar_backups(pasta or None)
+    except OSError:
+        existentes = []
+    if not existentes:
+        st.info("Ainda não há backups nessa pasta.")
+        return pasta
+    st.dataframe(
+        [{"arquivo": a.name, "feito_em": datetime.fromtimestamp(a.stat().st_mtime), "tamanho_kb": a.stat().st_size / 1024} for a in existentes[:5]],
+        hide_index=True, width="stretch",
+        column_config={"arquivo": "Arquivo", "feito_em": st.column_config.DatetimeColumn("Feito em", format="DD/MM/YYYY HH:mm"),
+                       "tamanho_kb": st.column_config.NumberColumn("Tamanho", format="%.0f KB")},
+        alt="Lista dos backups mais recentes",
+    )
+    with st.expander("Restaurar um backup", icon=":material/restore:"):
+        escolhido = st.selectbox("Backup", existentes, format_func=lambda a: a.name)
+        confirma = st.checkbox("Entendo que isso substitui todos os dados atuais (uma cópia do banco de hoje é guardada ao lado).")
+        if st.button("Restaurar", disabled=not confirma, type="primary"):
+            seguranca = backup.restaurar_backup(Path(escolhido))
+            st.cache_data.clear()
+            st.success(f"Banco restaurado. A cópia do banco anterior ficou em {seguranca.name}. Recarregue a página.")
+    return pasta
 
 
 def render() -> None:
@@ -44,6 +89,8 @@ def render() -> None:
         reajuste = st.number_input("Reajuste anual estimado da tarifa (%)", value=cfg.reajuste_tarifa_anual * 100,
                                     min_value=0.0, max_value=30.0, step=0.5) / 100
 
+    pasta_backup = _bloco_backup(cfg)
+
     if st.button("Salvar configurações", type="primary"):
         configuracoes.salvar(configuracoes.Configuracoes(
             investimento_total=investimento, data_investimento=data_investimento,
@@ -51,6 +98,7 @@ def render() -> None:
             qtd_parcelas=int(qtd_parcelas), data_primeira_parcela=data_primeira_parcela,
             icms=icms, pis_cofins=pis_cofins, degradacao_anual=degradacao,
             reajuste_tarifa_anual=reajuste, performance_ratio=performance_ratio,
+            pasta_backup=pasta_backup,
         ))
         st.success("Salvo.")
 

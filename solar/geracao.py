@@ -77,3 +77,33 @@ def avaliar_geracao(df_faturas_geradoras: pd.DataFrame, performance_ratio: float
             "razao": razao, "alerta": razao < LIMIAR_ALERTA_GERACAO,
         })
     return pd.DataFrame(linhas)
+
+
+def fatores_sazonais_nasa(coordenadas: list[tuple[float, float]]) -> dict[int, float] | None:
+    """Fator de cada mês pela irradiação × dias (média 1), na média das usinas — serve de
+    âncora para a sazonalidade medida, que com poucos meses de histórico é ruidosa."""
+    acumulado = {m: 0.0 for m in range(1, 13)}
+    for lat, lon in coordenadas:
+        try:
+            irradiacao = _irradiacao_mensal(lat, lon)
+        except FalhaGeracao:
+            return None
+        for mes in range(1, 13):
+            dias = pd.Period(f"2025-{mes:02d}").days_in_month
+            acumulado[mes] += irradiacao.get(f"{mes:02d}", 0.0) * dias
+    media = sum(acumulado.values()) / 12
+    return {m: v / media for m, v in acumulado.items()} if media > 0 else None
+
+
+def rendimento_kwh_kwp_mes(coordenadas: list[tuple[float, float]], performance_ratio: float) -> float | None:
+    """Energia média que 1 kWp gera por mês (irradiação × dias × performance ratio),
+    na média das coordenadas informadas."""
+    totais = []
+    for lat, lon in coordenadas:
+        try:
+            irradiacao = _irradiacao_mensal(lat, lon)
+        except FalhaGeracao:
+            return None
+        anual = sum(irradiacao.get(f"{m:02d}", 0.0) * pd.Period(f"2025-{m:02d}").days_in_month for m in range(1, 13))
+        totais.append(anual * performance_ratio / 12)
+    return sum(totais) / len(totais) if totais else None

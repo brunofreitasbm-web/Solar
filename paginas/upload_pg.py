@@ -3,9 +3,10 @@ from pathlib import Path
 import streamlit as st
 
 from solar.faturas.extracao import extrair
+from solar.faturas.importacao import salvar_se_completa
 
 
-def _processar(nome_bytes: list[tuple[str, bytes]]) -> None:
+def _processar(nome_bytes: list[tuple[str, bytes]], salvar_direto: bool) -> None:
     pendentes = st.session_state.setdefault("faturas_pendentes", [])
     processados = st.session_state.setdefault("arquivos_processados", set())
 
@@ -14,15 +15,24 @@ def _processar(nome_bytes: list[tuple[str, bytes]]) -> None:
         st.success(f"{len(nome_bytes)} arquivo(s) já processado(s). Veja a fila em **Revisar leitura**.")
         return
 
+    salvas = 0
     barra = st.progress(0.0, text="Lendo faturas…")
     for i, (nome, pdf) in enumerate(novos):
         resultado = extrair(nome, pdf)
-        pendentes.append(resultado)
+        if salvar_direto and salvar_se_completa(resultado):
+            salvas += 1
+        else:
+            pendentes.append(resultado)
         processados.add(nome)
         barra.progress((i + 1) / len(novos), text=f"Lendo {nome}…")
     barra.empty()
+    st.cache_data.clear()
 
-    st.success(f"{len(novos)} fatura(s) lida(s). Vá para **Revisar leitura** para confirmar os dados.")
+    na_fila = len(novos) - salvas
+    if salvas:
+        st.success(f"{salvas} fatura(s) lida(s) por completo e já salva(s).")
+    if na_fila:
+        st.warning(f"{na_fila} fatura(s) precisam da sua revisão — vá para **Revisar leitura**.")
 
 
 def render() -> None:
@@ -38,7 +48,7 @@ def render() -> None:
             help="Pode soltar várias de uma vez, de endereços e meses diferentes.",
         )
         if arquivos:
-            _processar([(a.name, a.read()) for a in arquivos])
+            _processar([(a.name, a.read()) for a in arquivos], salvar_direto=False)
         else:
             st.info("Nenhum arquivo enviado ainda. Assim que você soltar os PDFs aqui, eles aparecem "
                      "na fila de revisão.")
@@ -50,6 +60,10 @@ def render() -> None:
                  "faturas por endereço, uma subpasta por unidade.",
             placeholder=r"C:\Users\bruno\Downloads\Solar Contas Energia",
         )
+        salvar_direto = st.checkbox(
+            "Salvar direto as faturas lidas por completo", value=True,
+            help="Só vão para a fila de revisão as que tiverem algum campo faltando. Desmarque para revisar todas.",
+        )
         if st.button("Ler faturas da pasta", type="primary", disabled=not caminho):
             pasta = Path(caminho)
             if not pasta.is_dir():
@@ -60,4 +74,4 @@ def render() -> None:
                     st.warning("Nenhum PDF encontrado nessa pasta (nem nas subpastas).")
                 else:
                     st.caption(f"{len(pdfs)} PDF(s) encontrado(s).")
-                    _processar([(str(p.relative_to(pasta)), p.read_bytes()) for p in pdfs])
+                    _processar([(str(p.relative_to(pasta)), p.read_bytes()) for p in pdfs], salvar_direto)

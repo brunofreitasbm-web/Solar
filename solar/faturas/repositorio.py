@@ -1,3 +1,5 @@
+import json
+
 import pandas as pd
 
 from solar import unidades
@@ -7,12 +9,15 @@ from solar.faturas.modelo import Fatura
 COLUNAS_DB = (
     "uc", "mes_ref", "consumo_kwh", "injetado_kwh", "compensado_kwh", "saldo_creditos_kwh",
     "credito_rs", "tarifa_kwh", "total_rs", "bandeira", "arquivo", "origem",
+    "vencimento", "emissao", "proxima_leitura", "consumo_rs", "fio_b_rs", "beneficio_rs",
+    "bandeira_rs", "cip_rs", "multa_rs", "juros_rs", "outros_rs",
 )
 
 
 def salvar(fatura: Fatura) -> None:
     unidades.garantir(fatura.uc, fatura.endereco, fatura.tem_geracao)
     dados = {c: getattr(fatura, c) for c in COLUNAS_DB}
+    dados["rateio_json"] = json.dumps(fatura.rateio)
     colunas = ", ".join(dados)
     marcadores = ", ".join(f":{c}" for c in dados)
     with conexao() as con:
@@ -28,7 +33,8 @@ def tabela() -> pd.DataFrame:
             con,
         )
     df["geradora"] = df["geradora"].astype(bool)
-    return df
+    df["rateio"] = df["rateio_json"].apply(lambda j: json.loads(j) if j else {})
+    return df.drop(columns="rateio_json")
 
 
 def excluir(fatura_id: int) -> None:

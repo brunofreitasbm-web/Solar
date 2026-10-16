@@ -25,10 +25,13 @@ def mes_legivel(mes_ref: str) -> str:
     return f"{MESES_PT[int(mes)]}/{ano[2:]}"
 
 
+def num(valor: float, casas: int = 0) -> str:
+    """Número no padrão pt-BR: milhar com ponto, decimal com vírgula."""
+    return f"{valor:,.{casas}f}".replace(",", "§").replace(".", ",").replace("§", ".")
+
+
 def rs(valor: float, casas: int = 0) -> str:
-    """Formata em R$ no padrão pt-BR: milhar com ponto, decimal com vírgula."""
-    texto = f"{valor:,.{casas}f}".replace(",", "§").replace(".", ",").replace("§", ".")
-    return f"R$ {texto}"
+    return f"R$ {num(valor, casas)}"
 
 
 def rs_md(valor: float, casas: int = 0) -> str:
@@ -47,9 +50,8 @@ def layout_base(titulo: str, subtitulo: str = "") -> dict:
         font=FONTE,
         plot_bgcolor="white",
         paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(l=10, r=10, t=60, b=10),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1,
-                    font=dict(size=12)),
+        margin=dict(l=10, r=10, t=60, b=60),
+        legend=dict(orientation="h", yanchor="top", y=-0.18, xanchor="left", x=0, font=dict(size=12)),
         hoverlabel=dict(bgcolor="white", font_size=13, bordercolor=COR_GRADE),
         separators=",.",  # formatação pt-BR: vírgula decimal, ponto de milhar
     )
@@ -61,7 +63,7 @@ def eixo_y_moeda(titulo: str = "") -> dict:
 
 
 def eixo_x_categoria() -> dict:
-    return dict(showgrid=False)
+    return dict(showgrid=False, type="category")
 
 
 def grafico_economia_mensal(resumo: pd.DataFrame) -> go.Figure:

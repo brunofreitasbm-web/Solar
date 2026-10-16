@@ -64,3 +64,14 @@ def comparar_com_investimento(
             fator_final = None
         resultado[f"{nome}_valor_final_rs"] = investimento * fator_final if fator_final else None
     return resultado
+
+
+def cdi_anual_medio(meses: int = 12) -> float | None:
+    """CDI dos últimos `meses` meses, composto e anualizado — referência do custo de
+    oportunidade do dinheiro (ex.: quanto rende o valor que seria usado para amortizar)."""
+    try:
+        df = _serie_mensal(BCB_SERIE_CDI_MENSAL, _data_inicial_br(date(date.today().year - 2, 1, 1).isoformat()))
+    except FalhaBenchmark:
+        return None
+    taxas = pd.to_numeric(df["valor"].str.replace(",", "."), errors="coerce").dropna().tail(meses) / 100
+    return float((1 + taxas).prod() ** (12 / len(taxas)) - 1) if len(taxas) else None

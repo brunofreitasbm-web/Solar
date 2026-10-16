@@ -17,6 +17,7 @@ class Configuracoes:
     degradacao_anual: float = config.PADRAO_DEGRADACAO_ANUAL
     reajuste_tarifa_anual: float = config.PADRAO_REAJUSTE_TARIFA_ANUAL
     performance_ratio: float = config.PADRAO_PERFORMANCE_RATIO
+    pasta_backup: str = ""
 
     @property
     def completo(self) -> bool:
