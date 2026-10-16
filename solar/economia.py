@@ -17,15 +17,19 @@ def percentual_fio_b(mes_ref: str, data_pedido_conexao: str | None) -> float:
 
 
 def economia_da_fatura(linha: pd.Series, tarifa_tusd_kwh: float, tarifa_padrao_kwh: float = 0.0) -> float:
-    """Economia do mês = valor da energia compensada (direto da fatura, se houver, senão
-    kWh compensado × tarifa cheia) − Fio B incidente sobre essa energia (Lei 14.300)."""
+    """Economia do mês: quando a própria fatura informa o Benefício Tarifário Líquido SCEE
+    (`credito_rs`), esse valor já vem líquido do Fio B — é a economia real. Só quando a
+    fatura não traz esse campo (ex.: leitura incompleta) estimamos pela tarifa cheia menos
+    o Fio B calculado pela regra da Lei 14.300."""
     compensado_kwh = linha["compensado_kwh"] or 0.0
     if compensado_kwh <= 0:
         return 0.0
 
-    tarifa_cheia = linha["tarifa_kwh"] or tarifa_padrao_kwh
-    valor_compensado = linha["credito_rs"] if pd.notna(linha["credito_rs"]) else compensado_kwh * tarifa_cheia
+    if pd.notna(linha["credito_rs"]):
+        return max(linha["credito_rs"], 0.0)
 
+    tarifa_cheia = linha["tarifa_kwh"] or tarifa_padrao_kwh
+    valor_compensado = compensado_kwh * tarifa_cheia
     percentual = percentual_fio_b(linha["mes_ref"], linha["data_pedido_conexao"])
     fio_b = compensado_kwh * tarifa_tusd_kwh * percentual
 

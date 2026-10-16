@@ -1,5 +1,6 @@
-"""Leitura por regras do layout de fatura da Equatorial. Trabalha sobre texto normalizado
-(maiúsculo, sem acento) para tolerar variações de OCR/encoding entre versões do PDF."""
+"""Leitura por regras do layout real de fatura da Equatorial Pará (nota fiscal + boleto).
+Calibrado em 136 faturas reais do usuário, cobrindo as duas variantes do PDF: com resumo
+"Nome do Cliente / C.C." no rodapé, e com ficha de compensação (boleto) no lugar dele."""
 
 import io
 import re
@@ -9,18 +10,35 @@ import pdfplumber
 
 from solar.faturas.modelo import CAMPOS_OBRIGATORIOS, Fatura
 
-MESES = {"JAN": 1, "FEV": 2, "MAR": 3, "ABR": 4, "MAI": 5, "JUN": 6,
-         "JUL": 7, "AGO": 8, "SET": 9, "OUT": 10, "NOV": 11, "DEZ": 12}
-NUMERO_BR = r"-?\d{1,3}(?:\.\d{3})*(?:,\d+)?|-?\d+(?:,\d+)?"
+MESES_ABREV = {"JAN": 1, "FEV": 2, "MAR": 3, "ABR": 4, "MAI": 5, "JUN": 6,
+               "JUL": 7, "AGO": 8, "SET": 9, "OUT": 10, "NOV": 11, "DEZ": 12}
+NUMERO_BR = r"(?:-?\d{1,3}(?:\.\d{3})*(?:,\d+)?|-?\d+(?:,\d+)?)"
 
-RE_UC = re.compile(r"(?:UNIDADE CONSUMIDORA|CONTA CONTRATO|INSTALACAO|CODIGO DO CLIENTE|\bUC\b)\D{0,40}?(\d{6,12})")
-RE_MES_TEXTO = re.compile(r"\b(" + "|".join(MESES) + r")\s*/\s*(20\d{2})\b")
-RE_MES_NUMERO = re.compile(r"REFERENCIA\D{0,30}?(\d{2})\s*/\s*(20\d{2})")
-RE_TOTAL = re.compile(r"(?:TOTAL A PAGAR|VALOR A PAGAR|VALOR TOTAL)\D{0,20}?(\d{1,3}(?:\.\d{3})*,\d{2})")
-RE_SALDO = re.compile(r"SALDO\s*(?:ATUAL|ACUMULADO|DE CREDITOS?|DISPONIVEL|A COMPENSAR)?\D{0,30}?(" + NUMERO_BR + r")\s*KWH")
-RE_INJETADO_MES = re.compile(r"(?:ENERGIA\s+)?(?:INJETADA|GERACAO)\s+(?:NO|DO)\s+(?:MES|CICLO)\D{0,20}?(" + NUMERO_BR + r")\s*KWH")
-RE_BANDEIRA = re.compile(r"BANDEIRA\s*(VERDE|AMARELA|VERMELHA(?:\s*P(?:ATAMAR)?\s*\d)?|ESCASSEZ HIDRICA)")
-RE_ENDERECO = re.compile(r"(?:ENDERECO|LOCAL DE CONSUMO)\s*:?\s*(.{10,90})")
+# Identificador estável da unidade: aparece em TODA fatura, logo antes do link da chave de
+# acesso. Mais confiável que o "C.C." do rodapé, que só existe em uma das duas variantes.
+RE_UC = re.compile(r"(\d)\.(\d{3})\.(\d{3})\.(\d{3})-(\d{2})\s*\n?\s*HTTPS")
+
+# "<mês>/<ano> <vencimento> R$ <total> <emissão> AS <hora>" — aparece em toda fatura, logo
+# após o protocolo de autorização, nas duas variantes de layout.
+RE_CABECALHO = re.compile(
+    r"(\d{2})/(20\d{2})\s+\d{2}/\d{2}/\d{4}\s+R\$\s*(" + NUMERO_BR + r")\s+\d{2}/\d{2}/\d{4}\s+AS"
+)
+
+RE_CONSUMO_LINHA = re.compile(
+    r"\bCONSUMO \(KWH\)\s+(" + NUMERO_BR + r")(?:\s+" + NUMERO_BR + r"){4}\s+(" + NUMERO_BR + r")"
+)
+RE_CONSUMO_TOTAL = re.compile(
+    r"CONSUMO ATIVO TOTAL\s+" + NUMERO_BR + r"\s+" + NUMERO_BR + r"\s+" + NUMERO_BR + r"\s+(" + NUMERO_BR + r")\s*KWH"
+)
+RE_INJETADO_TOTAL = re.compile(
+    r"ENERGIA INJETADA ATIVO TOTAL\s+" + NUMERO_BR + r"\s+" + NUMERO_BR + r"\s+" + NUMERO_BR + r"\s+(" + NUMERO_BR + r")\s*KWH"
+)
+RE_COMPENSADO = re.compile(r"CONSUMO COMPENSADO\s*\(KWH\)\s+(" + NUMERO_BR + r")")
+RE_CREDITO_LIQUIDO = re.compile(r"BENEFICIO TARIFARIO LIQUIDO SCEE\s+(" + NUMERO_BR + r")")
+RE_SALDO_ACUMULADO = re.compile(r"SALDO ACUMULADO GERAL TOTAL:?\s*(" + NUMERO_BR + r")")
+RE_GERADORA = re.compile(r"ENERGIA INJETADA ATIVO TOTAL|ENERGIA ATIVA INJETADA \(KWH\)")
+RE_BANDEIRA = re.compile(r"\b(VERDE|AMARELA|VERMELHA(?:\s+PATAMAR\s*\d)?|ESCASSEZ HIDRICA)\s*:")
+RE_ENDERECO = re.compile(r"CPF:.{0,20}\n(.{10,90})\nCEP:\s*(\d{5}-?\d{3})\s*-\s*([A-Z\s]+?)\s*-\s*([A-Z\s]+?)\s*-\s*PA")
 
 
 def numero_br(texto: str) -> float:
@@ -37,69 +55,76 @@ def extrair_texto(pdf: bytes) -> str:
         return "\n".join(p.extract_text() or "" for p in doc.pages)
 
 
-def _linhas_com(texto: str, padrao: str, excluir: str | None = None) -> list[list[float]]:
-    """Números de cada linha que casa com `padrao` — itens da fatura vêm como 'DESCRIÇÃO qtd tarifa valor'."""
-    resultado = []
-    for linha in texto.splitlines():
-        if re.search(padrao, linha) and not (excluir and re.search(excluir, linha)):
-            numeros = [numero_br(n) for n in re.findall(NUMERO_BR, linha)]
-            if numeros:
-                resultado.append(numeros)
-    return resultado
+def _uc(texto: str) -> str | None:
+    m = RE_UC.search(texto)
+    return "".join(m.groups()) if m else None
 
 
-def _mes_ref(texto: str) -> str:
-    if m := RE_MES_NUMERO.search(texto):
-        return f"{m.group(2)}-{m.group(1)}"
-    if m := RE_MES_TEXTO.search(texto):
-        return f"{m.group(2)}-{MESES[m.group(1)]:02d}"
-    return ""
+def _mes_e_total(texto: str) -> tuple[str | None, float | None]:
+    m = RE_CABECALHO.search(texto)
+    if not m:
+        return None, None
+    mes, ano, total = m.groups()
+    return f"{ano}-{mes}", numero_br(total)
 
 
-def _consumo_e_tarifa(texto: str) -> tuple[float, float | None]:
-    linhas = _linhas_com(texto, r"CONSUMO.*KWH|^CONSUMO\b", excluir=r"INJETAD|MEDIA|HISTORICO")
-    if not linhas:
-        return 0.0, None
-    numeros = linhas[0]
-    tarifa = next((n for n in numeros[1:] if 0.2 < n < 3), None)
-    return numeros[0], tarifa
+def _consumo_kwh(texto: str) -> float | None:
+    """Prioriza a leitura do medidor (base de faturamento); usa a linha "Consumo (kWh)"
+    só quando não há bandeira dividindo o ciclo em mais de um segmento de tarifa."""
+    if m := RE_CONSUMO_TOTAL.search(texto):
+        return numero_br(m.group(1))
+    if m := RE_CONSUMO_LINHA.search(texto):
+        return numero_br(m.group(1))
+    return None
+
+
+def _tarifa_kwh(texto: str) -> float | None:
+    m = RE_CONSUMO_LINHA.search(texto)
+    if not m:
+        return None
+    quantidade, valor_total = numero_br(m.group(1)), numero_br(m.group(2))
+    return valor_total / quantidade if quantidade else None
 
 
 def _compensacao(texto: str) -> tuple[float, float | None]:
-    """Energia injetada costuma aparecer em duas linhas (TUSD e TE) com a mesma quantidade:
-    quantidade = maior kWh, crédito = soma dos valores das linhas."""
-    linhas = _linhas_com(texto, r"INJETAD|COMPENSAD|SCEE", excluir=r"NO MES|DO MES|SALDO")
-    if not linhas:
-        return 0.0, None
-    quantidade = max(abs(l[0]) for l in linhas)
-    credito = sum(abs(l[-1]) for l in linhas if len(l) > 1)
-    return quantidade, credito or None
+    compensado = numero_br(RE_COMPENSADO.search(texto).group(1)) if RE_COMPENSADO.search(texto) else 0.0
+    credito = abs(numero_br(RE_CREDITO_LIQUIDO.search(texto).group(1))) if RE_CREDITO_LIQUIDO.search(texto) else None
+    return compensado, credito
 
 
-def _primeiro(regex: re.Pattern, texto: str, conversor=str):
-    m = regex.search(texto)
-    return conversor(m.group(1).strip()) if m else None
+def _endereco(texto: str) -> str:
+    m = RE_ENDERECO.search(texto)
+    if not m:
+        return ""
+    rua, bairro, cidade = m.group(1).strip().title(), m.group(3).strip().title(), m.group(4).strip().title()
+    return f"{rua} — {bairro}, {cidade}"
 
 
 def interpretar(texto_bruto: str) -> Fatura:
     texto = normalizar(texto_bruto)
-    consumo, tarifa = _consumo_e_tarifa(texto)
+    mes_ref, total_rs = _mes_e_total(texto)
     compensado, credito = _compensacao(texto)
-    injetado = _primeiro(RE_INJETADO_MES, texto, numero_br) or 0.0
+    injetado = numero_br(m.group(1)) if (m := RE_INJETADO_TOTAL.search(texto)) else 0.0
+    saldo = numero_br(m.group(1)) if (m := RE_SALDO_ACUMULADO.search(texto)) else 0.0
+    bandeiras = RE_BANDEIRA.findall(texto)
+
+    uc = _uc(texto)
+    consumo = _consumo_kwh(texto)
 
     fatura = Fatura(
-        uc=_primeiro(RE_UC, texto) or "",
-        mes_ref=_mes_ref(texto),
-        consumo_kwh=consumo,
+        uc=uc or "",
+        mes_ref=mes_ref or "",
+        consumo_kwh=consumo if consumo is not None else 0.0,
         injetado_kwh=injetado,
         compensado_kwh=compensado,
-        saldo_creditos_kwh=_primeiro(RE_SALDO, texto, numero_br) or 0.0,
+        saldo_creditos_kwh=saldo,
         credito_rs=credito,
-        tarifa_kwh=tarifa,
-        total_rs=_primeiro(RE_TOTAL, texto, numero_br) or 0.0,
-        bandeira=(_primeiro(RE_BANDEIRA, texto) or "").title(),
-        endereco=(_primeiro(RE_ENDERECO, texto) or "").title(),
+        tarifa_kwh=_tarifa_kwh(texto),
+        total_rs=total_rs if total_rs is not None else 0.0,
+        bandeira="/".join(dict.fromkeys(b.title() for b in bandeiras)),
+        endereco=_endereco(texto),
         origem="parser",
     )
-    fatura.campos_faltando = [c for c in CAMPOS_OBRIGATORIOS if not getattr(fatura, c)]
+    campos_presentes = {"uc": uc, "mes_ref": mes_ref, "consumo_kwh": consumo, "total_rs": total_rs}
+    fatura.campos_faltando = [c for c in CAMPOS_OBRIGATORIOS if campos_presentes[c] is None]
     return fatura

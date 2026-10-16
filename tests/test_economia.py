@@ -18,11 +18,12 @@ def test_percentual_fio_b_2026():
     assert percentual_fio_b("2026-06", "2024-01-01") == 0.60
 
 
-def test_economia_usa_credito_da_fatura_quando_disponivel():
-    linha = _linha(credito_rs=135.0)
+def test_economia_usa_credito_liquido_da_fatura_quando_disponivel():
+    # credito_rs vem do "Benefício Tarifário Líquido SCEE" da própria fatura — já é líquido
+    # do Fio B, não deve ser descontado de novo.
+    linha = _linha(credito_rs=93.60)
     valor = economia_da_fatura(linha, tarifa_tusd_kwh=0.69)
-    # 135 - (100 * 0.69 * 0.60) = 135 - 41.4 = 93.6
-    assert round(valor, 2) == 93.60
+    assert valor == 93.60
 
 
 def test_economia_calcula_pela_tarifa_quando_sem_credito_na_fatura():
@@ -32,8 +33,9 @@ def test_economia_calcula_pela_tarifa_quando_sem_credito_na_fatura():
     assert round(valor, 2) == 88.60
 
 
-def test_economia_nunca_negativa():
-    linha = _linha(credito_rs=10.0, compensado_kwh=100.0)
+def test_economia_nunca_negativa_quando_estimada():
+    # Sem credito_rs na fatura (estimativa por tarifa): Fio B não pode deixar a economia negativa.
+    linha = _linha(credito_rs=None, tarifa_kwh=1.0, compensado_kwh=100.0)
     valor = economia_da_fatura(linha, tarifa_tusd_kwh=5.0)
     assert valor == 0.0
 
