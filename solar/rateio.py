@@ -22,11 +22,12 @@ class ResultadoRateio:
 
 
 def sugerir_percentuais(
-    demanda: dict[str, float], valor_kwh: dict[str, float], producao: float, sem_sobra: frozenset[str] = frozenset()
+    demanda: dict[str, float], valor_kwh: dict[str, float], producao: float, sem_sobra: frozenset[str] = frozenset(),
+    prioritarias: frozenset[str] = frozenset(),
 ) -> dict[str, float]:
     """Percentual (soma 100, duas casas — como a Equatorial aceita) que cada unidade deve
     receber de cada geradora. Se sobra energia, reparte a sobra proporcional à demanda entre
-    as unidades que podem recebê-la (fora de `sem_sobra`); se falta, cobre primeiro as
+    as unidades que podem recebê-la (só as `prioritarias`, se houver; senão todas fora de `sem_sobra`); se falta, cobre primeiro as
     unidades onde o kWh compensado vale mais."""
     demanda = {uc: d for uc, d in demanda.items() if d > 0}
     total = sum(demanda.values())
@@ -35,7 +36,8 @@ def sugerir_percentuais(
 
     if producao >= total:
         sobra = producao - total
-        favorecidas = {uc: d for uc, d in demanda.items() if uc not in sem_sobra} or demanda
+        favorecidas = ({uc: d for uc, d in demanda.items() if uc in prioritarias}
+                       or {uc: d for uc, d in demanda.items() if uc not in sem_sobra} or demanda)
         base_sobra = sum(favorecidas.values())
         alocado = {uc: d + (sobra * d / base_sobra if uc in favorecidas else 0.0) for uc, d in demanda.items()}
         reparte = producao
@@ -62,10 +64,13 @@ def _percentual_atual(ultimas: pd.DataFrame, geradoras: list[str]) -> dict[str, 
 
 
 def analisar(
-    df_economia: pd.DataFrame, nomes: dict[str, str], meses_base: int = 6, horizonte_saldo_meses: int = 12
+    df_economia: pd.DataFrame, nomes: dict[str, str], meses_base: int = 6, horizonte_saldo_meses: int = 12,
+    esvaziar: frozenset[str] = frozenset(), prioritarias: frozenset[str] = frozenset(),
 ) -> ResultadoRateio | None:
     """`horizonte_saldo_meses`: em quantos meses o crédito já acumulado numa unidade deve ser
-    consumido — a unidade recebe menos energia nova e a sobra vai para quem está descoberto."""
+    consumido — a unidade recebe menos energia nova e a sobra vai para quem está descoberto.
+    `esvaziar`: unidades que ficam em 0% até gastar o saldo (o consumo delas o consome).
+    `prioritarias`: unidades que recebem a sobra de geração e são cobertas por inteiro, mesmo com saldo."""
     meses = sorted(df_economia["mes_ref"].unique())[-meses_base:]
     base = df_economia[df_economia["mes_ref"].isin(meses)]
     ultimas = df_economia.sort_values("mes_ref").groupby("uc").tail(1).set_index("uc")
@@ -83,14 +88,17 @@ def analisar(
 
     demanda = (consumo - config.DISPONIBILIDADE_KWH).clip(lower=0)
     saldo = ultimas["saldo_creditos_kwh"].reindex(consumo.index).fillna(0.0)
-    consumo_do_saldo = saldo / horizonte_saldo_meses
+    demanda_fixa = demanda.reindex(consumo.index)
+    consumo_do_saldo = (saldo / horizonte_saldo_meses).where(~saldo.index.isin(esvaziar), pd.concat([saldo, demanda_fixa], axis=1).min(axis=1))
     atual = _percentual_atual(ultimas, list(producao.index))
     alocado_atual = pd.Series(
         {uc: sum(pct / 100 * producao[g] for g, pct in atual.get(uc, {}).items()) for uc in consumo.index}
     )
     demanda_alvo = (demanda - consumo_do_saldo).clip(lower=0)
+    demanda_alvo[demanda_alvo.index.isin(esvaziar)] = 0.0
+    demanda_alvo[demanda_alvo.index.isin(prioritarias)] = demanda[demanda_alvo.index.isin(prioritarias)]
     com_saldo = frozenset(saldo[saldo > 0.5].index)
-    sugerido = sugerir_percentuais(demanda_alvo.to_dict(), valor_kwh.to_dict(), producao.sum(), com_saldo)
+    sugerido = sugerir_percentuais(demanda_alvo.to_dict(), valor_kwh.to_dict(), producao.sum(), com_saldo, prioritarias)
     alocado_sugerido = pd.Series({uc: sugerido.get(uc, 0.0) / 100 * producao.sum() for uc in consumo.index})
 
     def descoberto(alocado: pd.Series) -> pd.Series:

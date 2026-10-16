@@ -1,3 +1,4 @@
+import pytest
 import pandas as pd
 
 from solar.rateio import analisar, sugerir_percentuais
@@ -66,3 +67,10 @@ def test_sem_geradora_nao_ha_analise():
     df = _df()
     df["injetado_kwh"] = 0.0
     assert analisar(df, {}, meses_base=2) is None
+
+
+def test_prioritarias_recebem_a_sobra_de_geracao():
+    demanda = {"a": 100.0, "b": 100.0, "c": 100.0}
+    pct = sugerir_percentuais(demanda, {}, 600.0, prioritarias=frozenset({"b", "c"}))
+    assert pct["a"] == pytest.approx(100 / 6, abs=0.02) and pct["b"] == pytest.approx(pct["c"], abs=0.02)
+    assert pct["b"] > pct["a"] and sum(pct.values()) == pytest.approx(100)

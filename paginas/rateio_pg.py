@@ -9,6 +9,14 @@ def _pedido_para_a_distribuidora(r: rateio.ResultadoRateio) -> str:
     return "Percentual de rateio sugerido (aplicar a cada usina geradora):\n" + "\n".join(linhas)
 
 
+def _aviso_sobra_das_prioritarias(r: rateio.ResultadoRateio, prioridade: list[str]) -> None:
+    sobrando = r.tabela[r.tabela["unidade"].isin(prioridade) & (r.tabela["alocado_sugerido_kwh"] > r.tabela["demanda_kwh"] + 50)]
+    for l in sobrando.itertuples():
+        guardado = f", sobre {graficos.num(l.saldo_kwh)} kWh já parados lá" if l.saldo_kwh > 100 else ""
+        st.warning(f"{l.unidade} vai receber {graficos.num(l.alocado_sugerido_kwh)} kWh/mês para um consumo de {graficos.num(l.demanda_kwh)} kWh/mês: "
+                   f"{graficos.num(l.alocado_sugerido_kwh - l.demanda_kwh)} kWh/mês viram crédito acumulado{guardado}.", icon=":material/inventory_2:")
+
+
 def render() -> None:
     st.title("Rateio de créditos")
     st.caption("Cada usina distribui a energia entre as unidades por percentual. Aqui está se esses percentuais "
@@ -20,7 +28,18 @@ def render() -> None:
 
     horizonte = st.slider("Em quantos meses consumir o saldo de créditos já acumulado", 3, 36, 12,
                           help="Unidades com saldo acumulado recebem menos energia nova até gastá-lo; a sobra vai para quem está descoberto.")
-    r = rateio.analisar(p.df_economia, p.nomes, horizonte_saldo_meses=horizonte)
+    nome_uc = {nome: uc for uc, nome in p.nomes.items()}
+    maior_saldo = p.df_economia.sort_values("mes_ref").groupby("uc").tail(1).nlargest(1, "saldo_creditos_kwh")["uc"].map(p.nomes).tolist()
+    col_esvaziar, col_prioridade = st.columns(2)
+    with col_esvaziar:
+        esvaziar = st.multiselect("Esvaziar o saldo de créditos de", list(nome_uc), default=maior_saldo,
+                                  help="Essas unidades passam a receber 0% das usinas; o consumo delas gasta o saldo acumulado.")
+    with col_prioridade:
+        prioridade = st.multiselect("Enviar a sobra de energia preferencialmente para", list(nome_uc),
+                                    default=[n for n in ("101", "701") if n in nome_uc],
+                                    help="Essas unidades são cobertas por inteiro e recebem a energia que sobra das usinas.")
+    r = rateio.analisar(p.df_economia, p.nomes, horizonte_saldo_meses=horizonte,
+                        esvaziar=frozenset(nome_uc[n] for n in esvaziar), prioritarias=frozenset(nome_uc[n] for n in prioridade))
     if r is None:
         st.info("Não encontrei unidades geradoras com energia injetada. Marque as geradoras em **Unidades**.")
         return
@@ -62,5 +81,6 @@ def render() -> None:
 
     st.subheader("O que pedir à Equatorial")
     st.code(_pedido_para_a_distribuidora(r), language=None)
+    _aviso_sobra_das_prioritarias(r, prioridade)
     st.caption("Use o mesmo percentual em cada usina geradora (a soma de cada usina precisa fechar 100%). A mudança vale a partir "
                "do ciclo seguinte ao pedido. Os percentuais usam o consumo e a geração médios dos últimos 6 meses — revise se algo mudar.")
