@@ -33,22 +33,22 @@ with st.sidebar:
 
 paginas = {
     "Operações": [
-        st.Page(upload_pg.render, title="Enviar faturas", icon=":material/upload_file:"),
-        st.Page(revisao_pg.render, title="Revisar leitura", icon=":material/fact_check:"),
-        st.Page(rateio_pg.render, title="Rateio de créditos", icon=":material/swap_horiz:"),
+        st.Page(upload_pg.render, title="Enviar faturas", icon=":material/upload_file:", url_path="enviar-faturas"),
+        st.Page(revisao_pg.render, title="Revisar leitura", icon=":material/fact_check:", url_path="revisar-leitura"),
+        st.Page(rateio_pg.render, title="Rateio de créditos", icon=":material/swap_horiz:", url_path="rateio-creditos"),
     ],
     "Visão Geral": [
-        st.Page(dashboard_pg.render, title="Dashboard", icon=":material/dashboard:"),
-        st.Page(composicao_pg.render, title="Composição da conta", icon=":material/pie_chart:"),
-        st.Page(unidades_pg.render, title="Unidades", icon=":material/home:"),
-        st.Page(vencimentos_pg.render, title="Vencimentos", icon=":material/calendar_month:"),
+        st.Page(dashboard_pg.render, title="Dashboard", icon=":material/dashboard:", url_path="dashboard", default=True),
+        st.Page(composicao_pg.render, title="Composição da conta", icon=":material/pie_chart:", url_path="composicao-conta"),
+        st.Page(unidades_pg.render, title="Unidades", icon=":material/home:", url_path="unidades"),
+        st.Page(vencimentos_pg.render, title="Vencimentos", icon=":material/calendar_month:", url_path="vencimentos"),
     ],
     "Planejamento": [
-        st.Page(simulador_pg.render, title="Simulador", icon=":material/calculate:"),
-        st.Page(nova_usina_pg.render, title="Nova usina", icon=":material/solar_power:"),
+        st.Page(simulador_pg.render, title="Simulador", icon=":material/calculate:", url_path="simulador"),
+        st.Page(nova_usina_pg.render, title="Nova usina", icon=":material/solar_power:", url_path="nova-usina"),
     ],
     "Sistema": [
-        st.Page(configuracoes_pg.render, title="Configurações", icon=":material/settings:"),
+        st.Page(configuracoes_pg.render, title="Configurações", icon=":material/settings:", url_path="configuracoes"),
     ],
 }
 
