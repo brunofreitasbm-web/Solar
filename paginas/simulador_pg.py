@@ -3,7 +3,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from paginas import painel_dados
+from paginas import painel_dados, ui
 from solar import ampliacao, benchmarks, config, expansao, financiamento, geracao, graficos, graficos_analise
 
 MODOS = {"Reduzir o prazo (mantém a parcela)": "prazo", "Reduzir a parcela (mantém o prazo)": "parcela"}
@@ -22,7 +22,8 @@ def _quitacao(p: painel_dados.Painel) -> None:
     cfg = p.cfg
     taxa = financiamento.taxa_mensal(cfg)
     if not taxa:
-        st.info("Informe o financiamento (valor, parcela, quantidade e data da 1ª parcela) em **Configurações** para simular a quitação.")
+        ui.estado_vazio("**Sem financiamento cadastrado.** Informe valor, parcela, quantidade e data da 1ª parcela para simular a quitação.",
+                        "configuracoes", "Cadastrar o financiamento")
         return
 
     hoje = date.today()
@@ -33,10 +34,10 @@ def _quitacao(p: painel_dados.Painel) -> None:
     anual = (1 + taxa) ** 12 - 1
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Custo do financiamento", f"{anual * 100:.1f}% a.a.", help=f"{taxa * 100:.2f}% ao mês, embutido no contrato.")
-    c2.metric("CDI (12 meses)", f"{cdi * 100:.1f}% a.a." if cdi else "—")
-    c3.metric("Saldo devedor estimado", graficos.rs(saldo), help="Valor presente das parcelas que faltam, pela taxa do contrato. Confirme o valor exato com o banco.")
-    c4.metric("Parcelas restantes", f"{restantes} de {cfg.qtd_parcelas}")
+    c1.metric("Custo do financiamento", f"{anual * 100:.1f}% a.a.", help=f"{taxa * 100:.2f}% ao mês, embutido no contrato.", border=True)
+    c2.metric("CDI (12 meses)", f"{cdi * 100:.1f}% a.a." if cdi else "—", border=True)
+    c3.metric("Saldo devedor estimado", graficos.rs(saldo), help="Valor presente das parcelas que faltam, pela taxa do contrato. Confirme o valor exato com o banco.", border=True)
+    c4.metric("Parcelas restantes", f"{restantes} de {cfg.qtd_parcelas}", border=True)
     if cdi and anual > cdi:
         st.info(f"O financiamento custa {anual * 100:.1f}% ao ano e o CDI rende {cdi * 100:.1f}%: cada real usado para amortizar "
                 f"rende mais que o mesmo real aplicado — desde que não falte caixa para imprevistos.", icon=":material/percent:")
@@ -53,12 +54,12 @@ def _quitacao(p: painel_dados.Painel) -> None:
     sim = financiamento.simular_amortizacao(cfg, valor, modo, hoje)
     antes, depois = _equilibrio(p), _equilibrio(p, sim)
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Juros economizados", graficos.rs(sim.juros_economizados))
+    m1.metric("Juros economizados", graficos.rs(sim.juros_economizados), border=True)
     m2.metric("Parcela" if modo == "parcela" else "Parcelas restantes",
-              graficos.rs(sim.parcela_nova) if modo == "parcela" else f"{sim.restantes_depois} (era {sim.restantes_antes})")
-    m3.metric("Saldo devedor depois", graficos.rs(sim.saldo_depois))
+              graficos.rs(sim.parcela_nova) if modo == "parcela" else f"{sim.restantes_depois} (era {sim.restantes_antes})", border=True)
+    m3.metric("Saldo devedor depois", graficos.rs(sim.saldo_depois), border=True)
     m4.metric("Ponto de equilíbrio", graficos_analise.mes_legivel_ou_traco(depois), delta=f"antes: {graficos_analise.mes_legivel_ou_traco(antes)}", delta_color="off",
-              help="Mês em que a economia acumulada cobre tudo o que saiu do bolso (parcelas e esta amortização).")
+              help="Mês em que a economia acumulada cobre tudo o que saiu do bolso (parcelas e esta amortização).", border=True)
     if cdi and valor > 0:
         rendimento = valor * ((1 + cdi) ** (restantes / 12) - 1)
         veredito = "amortizar rende mais" if sim.juros_economizados > rendimento else "aplicar rende mais"
@@ -78,21 +79,23 @@ def _quitacao(p: painel_dados.Painel) -> None:
 def _expansao(p: painel_dados.Painel) -> None:
     cfg, modelo = p.cfg, p.modelo
     if not modelo:
-        st.info("Sem faturas com energia compensada ainda.")
+        ui.estado_vazio("**Ainda não há faturas com energia compensada.** Envie as faturas das unidades que recebem créditos.",
+                        "enviar-faturas", "Enviar faturas")
         return
     demanda = expansao.analisar_demanda(p.df_economia, cfg.degradacao_anual, modelo.sazonalidade)
     rendimento = None
     if p.coordenadas:
         rendimento = geracao.rendimento_kwh_kwp_mes(p.coordenadas, cfg.performance_ratio)
     if not demanda or not rendimento:
-        st.info("Preciso de pelo menos 6 meses de geração e das coordenadas das usinas (página **Unidades**) para analisar a expansão.")
+        ui.estado_vazio("**Faltam dados para analisar a expansão:** pelo menos 6 meses de geração e as coordenadas das usinas.",
+                        "unidades", "Informar as coordenadas")
         return
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Geração das usinas (kWh/mês)", graficos.num(demanda.producao_kwh_mes))
-    c2.metric("Demanda compensável (kWh/mês)", graficos.num(demanda.demanda_kwh_mes))
-    c3.metric("Sobra de geração (kWh/mês)", graficos.num(demanda.sobra_kwh_mes), delta=f"{100 * demanda.sobra_kwh_mes / demanda.demanda_kwh_mes:.0f}% da demanda", delta_color="off")
-    c4.metric("Demanda cresce (kWh/mês por ano)", graficos.num(demanda.crescimento_kwh_mes_por_ano))
+    c1.metric("Geração das usinas (kWh/mês)", graficos.num(demanda.producao_kwh_mes), border=True)
+    c2.metric("Demanda compensável (kWh/mês)", graficos.num(demanda.demanda_kwh_mes), border=True)
+    c3.metric("Sobra de geração (kWh/mês)", graficos.num(demanda.sobra_kwh_mes), delta=f"{100 * demanda.sobra_kwh_mes / demanda.demanda_kwh_mes:.0f}% da demanda", delta_color="off", border=True)
+    c4.metric("Demanda cresce (kWh/mês por ano)", graficos.num(demanda.crescimento_kwh_mes_por_ano), border=True)
     if demanda.meses_ate_faltar is None:
         st.success("A geração cobre a demanda pelos próximos 10 anos na tendência atual. Ampliar agora não geraria economia.", icon=":material/check_circle:")
     elif demanda.meses_ate_faltar == 0:
@@ -130,10 +133,10 @@ def _expansao(p: painel_dados.Painel) -> None:
     r = expansao.simular_expansao(kwp, custo, rendimento, valor_kwh, cfg.reajuste_tarifa_anual, cfg.degradacao_anual, desconto,
                                   juros if financiar else None, 48, entrada, kwh_uteis)
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Investimento", graficos.rs(r.capex))
-    m2.metric("Economia por mês (inicial)", graficos.rs(r.economia_mes_inicial), help=f"{r.kwh_mes:,.0f} kWh/mês aproveitados.")
-    m3.metric("Payback", f"{r.payback_meses / 12:.1f} anos" if r.payback_meses else "não se paga em 25 anos")
-    m4.metric("TIR", f"{r.tir_anual * 100:.1f}% a.a." if r.tir_anual is not None else "—")
+    m1.metric("Investimento", graficos.rs(r.capex), border=True)
+    m2.metric("Economia por mês (inicial)", graficos.rs(r.economia_mes_inicial), help=f"{r.kwh_mes:,.0f} kWh/mês aproveitados.", border=True)
+    m3.metric("Payback", f"{r.payback_meses / 12:.1f} anos" if r.payback_meses else "não se paga em 25 anos", border=True)
+    m4.metric("TIR", f"{r.tir_anual * 100:.1f}% a.a." if r.tir_anual is not None else "—", border=True)
     if r.vpl > 0:
         st.success(f"Compensa: o valor presente é {graficos.rs_md(r.vpl)} acima do que o CDI de {desconto * 100:.1f}% a.a. entregaria.", icon=":material/check_circle:")
     else:
@@ -147,9 +150,9 @@ def render() -> None:
     st.title("Simulador")
     p = painel_dados.carregar()
     if p is None:
-        st.info("Nenhuma fatura salva ainda.")
+        ui.sem_faturas()
         return
-    aba_quitacao, aba_expansao = st.tabs(["Quitação antecipada", "Ampliar a usina"])
+    aba_quitacao, aba_expansao = st.tabs([":material/savings: Quitação antecipada", ":material/add_circle: Ampliar a usina"])
     with aba_quitacao:
         _quitacao(p)
     with aba_expansao:

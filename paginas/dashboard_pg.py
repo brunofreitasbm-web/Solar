@@ -1,7 +1,6 @@
-
 import streamlit as st
 
-from paginas import painel_dados
+from paginas import painel_dados, ui
 from solar import benchmarks, creditos, financiamento, geracao, graficos, graficos_analise, projecao, roi, vencimentos
 
 
@@ -9,26 +8,35 @@ def _mes(mes: str | None) -> str:
     return graficos_analise.mes_legivel_ou_traco(mes)
 
 
+def _quando(dias: int) -> str:
+    if dias == 0:
+        return "hoje"
+    if dias == 1:
+        return "amanhã"
+    if dias == -1:
+        return "ontem"
+    return f"em {dias} dias" if dias > 0 else f"há {-dias} dias"
+
+
 def _aviso_vencimentos(p: painel_dados.Painel) -> None:
     previsoes = vencimentos.proximos_vencimentos(p.df, p.nomes)
     proximas = previsoes[(previsoes["dias"] <= 7)]
     if proximas.empty:
         return
-    itens = ", ".join(f"{l.unidade} ({'hoje' if l.dias == 0 else 'amanhã' if l.dias == 1 else f'em {l.dias} dias' if l.dias > 0 else f'há {-l.dias} dias'})"
-                      for l in proximas.itertuples())
-    st.warning(f"Faturas previstas para esta semana: {itens}. Veja a página **Vencimentos** para baixar lembretes.",
-               icon=":material/event_upcoming:")
+    itens = ", ".join(f"{l.unidade} ({_quando(l.dias)})" for l in proximas.itertuples())
+    st.warning(f"Faturas previstas para esta semana: {itens}.", icon=":material/event_upcoming:")
+    ui.link_para("vencimentos", "Ver vencimentos e criar lembretes")
 
 
 def _kpis(p: painel_dados.Painel, acumulado, payback_previsto: str | None) -> None:
     cfg, resumo = p.cfg, p.resumo
     economia_total = resumo["economia_rs"].sum()
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Economia acumulada", graficos.rs(economia_total, 2))
-    col2.metric("Economia nos últimos 12 meses", graficos.rs(resumo.tail(12)["economia_rs"].sum(), 2))
-    col3.metric("ROI até hoje", f"{acumulado['roi_pct'].iloc[-1]:.1f}%" if cfg.completo else "—")
+    col1.metric("Economia acumulada", graficos.rs(economia_total, 2), border=True)
+    col2.metric("Economia nos últimos 12 meses", graficos.rs(resumo.tail(12)["economia_rs"].sum(), 2), border=True)
+    col3.metric("ROI até hoje", f"{acumulado['roi_pct'].iloc[-1]:.1f}%" if cfg.completo else "—", border=True)
     payback = roi.mes_payback(acumulado)
-    col4.metric("Payback" if payback else "Payback previsto", _mes(payback or payback_previsto))
+    col4.metric("Payback" if payback else "Payback previsto", _mes(payback or payback_previsto), border=True)
 
 
 def _projecao_e_premissas(p: painel_dados.Painel) -> tuple[str | None, str | None, str | None]:
@@ -51,11 +59,11 @@ def _bloco_financiamento(p: painel_dados.Painel, eq_com: str | None) -> None:
     taxa = financiamento.taxa_mensal(cfg)
 
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("Parcela mensal", graficos.rs(cfg.parcela_mensal, 2))
-    c2.metric("Meses com economia ≥ parcela", f"{cobertos} de {financiados}")
-    c3.metric("Saldo líquido acumulado", graficos.rs(saldo), help="Economia menos parcelas pagas até hoje.")
+    c1.metric("Parcela mensal", graficos.rs(cfg.parcela_mensal, 2), border=True)
+    c2.metric("Meses com economia ≥ parcela", f"{cobertos} de {financiados}", border=True)
+    c3.metric("Saldo líquido acumulado", graficos.rs(saldo), help="Economia menos parcelas pagas até hoje.", border=True)
     c4.metric("Custo do financiamento", f"{((1 + taxa) ** 12 - 1) * 100:.1f}% a.a." if taxa else "—",
-              help="Taxa embutida no valor financiado × parcelas. Compare com o CDI antes de decidir amortizar.")
+              help="Taxa embutida no valor financiado × parcelas. Compare com o CDI antes de decidir amortizar.", border=True)
     ultimos = fluxo[fluxo["parcela_rs"] > 0].tail(6)
     if len(ultimos) and (ultimos["saldo_liquido_rs"] >= 0).all():
         st.success("Nos últimos 6 meses a economia cobriu a parcela todos os meses.", icon=":material/trending_up:")
@@ -117,7 +125,8 @@ def _tabelas_creditos_e_geracao(p: painel_dados.Painel) -> None:
         },
         alt="Tabela com o saldo de créditos de energia (kWh) mais recente de cada unidade",
     )
-    st.caption(creditos.sugestao_rateio(saldos) + " Veja a página **Rateio** para o cálculo dos percentuais.")
+    st.caption(creditos.sugestao_rateio(saldos))
+    ui.link_para("rateio-creditos", "Calcular o rateio ideal")
 
     expirando = creditos.creditos_a_expirar(p.df)
     if not expirando.empty:
@@ -160,18 +169,34 @@ def _tabelas_creditos_e_geracao(p: painel_dados.Painel) -> None:
                    icon=":material/solar_power:")
 
 
+def _primeiros_passos() -> None:
+    st.markdown("Bem-vindo! Em três passos o painel mostra quanto a usina já economizou e quando ela se paga.")
+    passos = (
+        ("1. Envie as faturas", "Baixe da Equatorial ou arraste os PDFs das contas de energia.", "enviar-faturas", "Enviar faturas"),
+        ("2. Confira a leitura", "Se faltar algum dado em uma fatura, você corrige em segundos.", "revisar-leitura", "Revisar leitura"),
+        ("3. Informe o investimento", "Com o valor e a data, o app calcula ROI e payback.", "configuracoes", "Abrir configurações"),
+    )
+    for coluna, (titulo, texto, url, rotulo) in zip(st.columns(3), passos):
+        with coluna.container(border=True, height="stretch"):
+            st.markdown(f"**{titulo}**")
+            st.caption(texto)
+            ui.link_para(url, rotulo)
+
+
 def render() -> None:
     st.title("Dashboard")
     p = painel_dados.carregar()
     if p is None:
-        st.info("Nenhuma fatura salva ainda. Envie e confirme faturas nas páginas anteriores.")
+        _primeiros_passos()
         return
 
     cfg = p.cfg
     if not cfg.completo:
-        st.warning("Informe o investimento total e a data em **Configurações** para ver o ROI.")
+        st.warning("Falta informar o investimento total e a data para calcular ROI e payback.", icon=":material/payments:")
+        ui.link_para("configuracoes", "Informar o investimento")
     if p.tarifa is None:
-        st.error("Não foi possível consultar a tarifa da ANEEL; a economia de faturas sem a linha de consumo ficou menos precisa.")
+        st.error("Não consegui consultar a tarifa da ANEEL agora, então a economia das faturas sem linha de consumo ficou aproximada. "
+                 "Tente **Atualizar tarifa** em Configurações mais tarde.", icon=":material/cloud_off:")
 
     _aviso_vencimentos(p)
     acumulado = roi.serie_acumulada(p.resumo, cfg.investimento_total)
@@ -194,9 +219,9 @@ def render() -> None:
         economia_total = p.resumo["economia_rs"].sum()
         comparativo = benchmarks.comparar_com_investimento(cfg.investimento_total, cfg.data_investimento, economia_total)
         c1, c2, c3 = st.columns(3)
-        c1.metric("Usina (economia)", graficos.rs(comparativo["economia_acumulada_rs"], 2))
-        c2.metric("Se fosse CDI", graficos.rs(comparativo["cdi_valor_final_rs"], 2) if comparativo["cdi_valor_final_rs"] else "—")
-        c3.metric("Se fosse IPCA", graficos.rs(comparativo["ipca_valor_final_rs"], 2) if comparativo["ipca_valor_final_rs"] else "—")
+        c1.metric("Usina (economia)", graficos.rs(comparativo["economia_acumulada_rs"], 2), border=True)
+        c2.metric("Se fosse CDI", graficos.rs(comparativo["cdi_valor_final_rs"], 2) if comparativo["cdi_valor_final_rs"] else "—", border=True)
+        c3.metric("Se fosse IPCA", graficos.rs(comparativo["ipca_valor_final_rs"], 2) if comparativo["ipca_valor_final_rs"] else "—", border=True)
         st.caption("A comparação é do valor investido que seria devolvido pelo CDI/IPCA contra a economia acumulada da usina; "
                    "a usina continua economizando depois do payback, a renda fixa devolveria só o capital corrigido.")
 

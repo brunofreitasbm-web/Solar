@@ -4,7 +4,7 @@ from datetime import date
 import pandas as pd
 import streamlit as st
 
-from paginas import painel_dados
+from paginas import painel_dados, ui
 from solar import ampliacao, benchmarks, expansao, geracao, graficos, graficos_analise, unidades
 from solar.ampliacao import Premissas, UsinaPlanejada
 
@@ -19,11 +19,11 @@ def _formulario(u: UsinaPlanejada | None) -> None:
     with st.form(chave):
         c1, c2 = st.columns(2)
         with c1:
-            nome = st.text_input("Nome", value=atual.nome, placeholder="Ex.: Clínica FaçaAmigos")
+            nome = st.text_input("Nome *", value=atual.nome, placeholder="Ex.: Clínica FaçaAmigos")
             endereco = st.text_input("Endereço", value=atual.endereco)
             status = st.segmented_control("Situação", ampliacao.STATUS, default=atual.status)
-            paineis = st.number_input("Quantidade de placas", min_value=0, value=atual.paineis, step=1)
-            potencia = st.number_input("Potência de cada placa (W)", min_value=0.0, value=atual.potencia_painel_w, step=5.0)
+            paineis = st.number_input("Quantidade de placas *", min_value=0, value=atual.paineis, step=1)
+            potencia = st.number_input("Potência de cada placa (W) *", min_value=0.0, value=atual.potencia_painel_w, step=5.0)
             inversor = st.text_input("Inversor (modelo)", value=atual.inversor)
             potencia_inv = st.number_input("Potência do inversor (kW)", min_value=0.0, value=atual.potencia_inversor_kw, step=0.5)
         with c2:
@@ -38,19 +38,19 @@ def _formulario(u: UsinaPlanejada | None) -> None:
             simult = st.slider("Consumo no mesmo instante da geração (%)", 0, 100, round(atual.simultaneidade * 100), step=5,
                                help="Parte do consumo que acontece de dia, com o sol. Essa energia não passa pela rede, não paga Fio B e vale a tarifa cheia. Uma clínica que funciona de dia fica em 40–60%.")
             operacao = st.date_input("Início da operação (previsto)", value=date.fromisoformat(atual.data_operacao) if atual.data_operacao else None, format="DD/MM/YYYY")
-        enviar = st.form_submit_button("Salvar usina", type="primary")
+        enviar = st.form_submit_button("Salvar usina", type="primary", icon=":material/save:")
 
     if not enviar:
         return
     if not nome.strip() or not paineis or not potencia:
-        st.error("Preencha o nome, a quantidade de placas e a potência de cada placa.")
+        st.error("Preencha o nome, a quantidade de placas e a potência de cada placa (campos com *).", icon=":material/edit:")
         return
     ampliacao.salvar(replace(
         atual, nome=nome.strip(), endereco=endereco.strip(), status=status or atual.status, paineis=int(paineis), potencia_painel_w=potencia,
         inversor=inversor.strip(), potencia_inversor_kw=potencia_inv, uc=uc, custo_total=custo or None, valor_financiado=financiado or None,
         parcela_mensal=parcela or None, qtd_parcelas=int(parcelas) or None, consumo_kwh_mes=consumo or None, simultaneidade=simult / 100,
         data_operacao=operacao.isoformat() if operacao else None))
-    st.success("Usina salva.")
+    ui.avisar(f"Usina {nome.strip()} salva.")
     st.rerun()
 
 
@@ -95,7 +95,7 @@ def _resultado(p: painel_dados.Painel, u: UsinaPlanejada) -> None:
     coordenadas = [(u.lat, u.lon)] if u.lat and u.lon else p.coordenadas
     nasa = geracao.rendimento_kwh_kwp_mes(coordenadas, p.cfg.performance_ratio) if coordenadas else None
     if not p.modelo or not (medido or nasa):
-        st.info("Preciso das faturas das usinas atuais (e das coordenadas delas, em **Unidades**) para projetar a geração.")
+        ui.estado_vazio("**Faltam as coordenadas das usinas atuais** para projetar a geração da nova.", "unidades", "Informar as coordenadas")
         return
 
     opcoes = [o for o, v in ((BASE_MEDIDA, medido), (BASE_NASA, nasa)) if v]
@@ -115,16 +115,16 @@ def _resultado(p: painel_dados.Painel, u: UsinaPlanejada) -> None:
     r = projecao.expansao
 
     a, b, c, d = st.columns(4)
-    a.metric("Potência das placas", f"{graficos.num(u.kwp, 2)} kWp", help=f"{u.paineis} placas × {u.potencia_painel_w:,.0f} W.")
-    b.metric("Geração estimada", f"{graficos.num(projecao.geracao_kwh_mes)} kWh/mês", help=f"{graficos.num(rendimento)} kWh por kWp ao mês ({base.lower()}).")
-    c.metric("Economia por mês (inicial)", graficos.rs(projecao.economia_mes))
-    d.metric("Investimento" + (" (estimado)" if projecao.custo_estimado else ""), graficos.rs(projecao.custo_total))
+    a.metric("Potência das placas", f"{graficos.num(u.kwp, 2)} kWp", help=f"{u.paineis} placas × {u.potencia_painel_w:,.0f} W.", border=True)
+    b.metric("Geração estimada", f"{graficos.num(projecao.geracao_kwh_mes)} kWh/mês", help=f"{graficos.num(rendimento)} kWh por kWp ao mês ({base.lower()}).", border=True)
+    c.metric("Economia por mês (inicial)", graficos.rs(projecao.economia_mes), border=True)
+    d.metric("Investimento" + (" (estimado)" if projecao.custo_estimado else ""), graficos.rs(projecao.custo_total), border=True)
     e, f, g, h = st.columns(4)
-    e.metric("Payback", f"{r.payback_meses / 12:.1f} anos" if r.payback_meses else "não se paga em 25 anos")
-    f.metric("TIR", f"{r.tir_anual * 100:.1f}% a.a." if r.tir_anual is not None and r.tir_anual > -0.99 else "—")
-    g.metric("Valor presente (VPL)", graficos.rs(r.vpl), help=f"Ganho acima de aplicar o mesmo dinheiro no CDI de {premissas.desconto_anual * 100:.1f}% a.a.")
+    e.metric("Payback", f"{r.payback_meses / 12:.1f} anos" if r.payback_meses else "não se paga em 25 anos", border=True)
+    f.metric("TIR", f"{r.tir_anual * 100:.1f}% a.a." if r.tir_anual is not None and r.tir_anual > -0.99 else "—", border=True)
+    g.metric("Valor presente (VPL)", graficos.rs(r.vpl), help=f"Ganho acima de aplicar o mesmo dinheiro no CDI de {premissas.desconto_anual * 100:.1f}% a.a.", border=True)
     h.metric("Parcela" if r.parcela_mensal else "Financiamento", graficos.rs(r.parcela_mensal) if r.parcela_mensal else "à vista",
-             help=f"Juros implícitos de {(projecao.financiamento_juros_mensal or 0) * 100:.2f}% ao mês." if r.parcela_mensal else None)
+             help=f"Juros implícitos de {(projecao.financiamento_juros_mensal or 0) * 100:.2f}% ao mês." if r.parcela_mensal else None, border=True)
 
     if consumo_assumido:
         st.warning(f"Ainda sem consumo informado: assumi que a unidade consome o que a usina gera ({graficos.num(u.consumo_kwh_mes)} kWh/mês). "
@@ -150,21 +150,23 @@ def _carteira(p: painel_dados.Painel, u: UsinaPlanejada, projecao: ampliacao.Pro
     kwp_atual = sum(x.kwp or 0 for x in unidades.listar() if x.geradora and x.uc != u.uc)
     producao_atual = demanda.producao_kwh_mes if demanda else 0.0
     a, b, c = st.columns(3)
-    a.metric("Potência total (kWp)", graficos.num(kwp_atual + u.kwp, 1), delta=f"+{graficos.num(u.kwp, 1)} da usina nova")
-    b.metric("Geração total (kWh/mês)", graficos.num(producao_atual + projecao.geracao_kwh_mes), delta=f"+{graficos.num(projecao.geracao_kwh_mes)}")
+    a.metric("Potência total (kWp)", graficos.num(kwp_atual + u.kwp, 1), delta=f"+{graficos.num(u.kwp, 1)} da usina nova", border=True)
+    b.metric("Geração total (kWh/mês)", graficos.num(producao_atual + projecao.geracao_kwh_mes), delta=f"+{graficos.num(projecao.geracao_kwh_mes)}", border=True)
     c.metric("Sobra de geração das usinas atuais", graficos.num(demanda.sobra_kwh_mes) + " kWh/mês" if demanda else "—",
-             help="Já existe geração sobrando nas usinas atuais; por isso a economia da usina nova vem do consumo da própria unidade.")
+             help="Já existe geração sobrando nas usinas atuais; por isso a economia da usina nova vem do consumo da própria unidade.", border=True)
 
 
 def _comparar_com_real(p: painel_dados.Painel, u: UsinaPlanejada, previsto: list[float]) -> None:
     if not u.uc:
         st.subheader("Próximo passo")
-        st.markdown("Quando a primeira conta chegar: informe o **número da UC** acima e salve; depois envie o PDF em **Enviar faturas**. "
+        st.markdown("Quando a primeira conta chegar: informe o **número da UC** em **Editar dados da usina** e salve; depois envie o PDF. "
                     "A unidade já fica como geradora com os kWp certos e o retorno passa a usar a geração real.")
+        ui.link_para("enviar-faturas", "Enviar a primeira fatura")
         return
     real = p.df[p.df["uc"] == u.uc].sort_values("mes_ref")
     if real.empty:
-        st.info("A UC já está vinculada. Envie a primeira fatura em **Enviar faturas** para comparar a geração real com a prevista.")
+        ui.estado_vazio("**A UC já está vinculada.** Envie a primeira fatura para comparar a geração real com a prevista.",
+                        "enviar-faturas", "Enviar a primeira fatura")
         return
     tabela = real[["mes_ref", "injetado_kwh"]].copy()
     tabela["previsto"] = tabela["mes_ref"].map(lambda m: previsto[int(m[5:7]) - 1])
@@ -181,10 +183,11 @@ def render() -> None:
     p = painel_dados.carregar()
     usinas = ampliacao.listar()
     if p is None or not p.modelo:
-        st.info("Envie as faturas das usinas atuais primeiro: a projeção da nova usina usa o rendimento e a tarifa delas.")
+        ui.estado_vazio("**Envie primeiro as faturas das usinas atuais.** A projeção da nova usina usa o rendimento e a tarifa delas.",
+                        "enviar-faturas", "Enviar faturas")
         return
     if not usinas:
-        st.info("Nenhuma usina em instalação cadastrada. Preencha a ficha abaixo.")
+        st.info("Nenhuma usina em instalação cadastrada. Preencha a ficha abaixo para ver a geração e o retorno esperados.", icon=":material/add_circle:")
         _formulario(None)
         return
 
@@ -195,10 +198,9 @@ def render() -> None:
     _alerta_inversor(escolhida)
     _resultado(p, escolhida)
 
-    with st.expander("Editar dados da usina"):
+    with st.expander("Editar dados da usina", icon=":material/edit:"):
         _formulario(escolhida)
-        if st.button("Excluir esta usina", key=f"excluir_{escolhida.id}"):
-            ampliacao.excluir(escolhida.id)
-            st.rerun()
-    with st.expander("Cadastrar outra usina"):
+        ui.botao_excluir("Excluir esta usina", f"Excluir a usina planejada **{escolhida.nome}**?",
+                         lambda: ampliacao.excluir(escolhida.id), f"Usina {escolhida.nome} excluída.", key=f"excluir_{escolhida.id}")
+    with st.expander("Cadastrar outra usina", icon=":material/add:"):
         _formulario(None)

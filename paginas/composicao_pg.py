@@ -1,7 +1,7 @@
 import pandas as pd
 import streamlit as st
 
-from paginas import painel_dados
+from paginas import painel_dados, ui
 from solar import composicao, graficos, graficos_analise
 
 PERIODOS = ("Últimos 12 meses", "Desde o início", "Um mês")
@@ -52,7 +52,7 @@ def render() -> None:
     st.caption("Se a usina compensa toda a energia, por que ainda sobra conta? Aqui está a resposta, em reais, nas suas faturas.")
     p = painel_dados.carregar()
     if p is None:
-        st.info("Nenhuma fatura salva ainda. Envie e confirme faturas para ver a composição.")
+        ui.sem_faturas()
         return
 
     meses = sorted(p.df_economia["mes_ref"].unique())
@@ -66,13 +66,13 @@ def render() -> None:
 
     c = composicao.compor(p.df_economia, selecionados, uc)
     if not c.real and not c.economia:
-        st.warning("Não há faturas dessa unidade nesse período.")
+        st.info("Não há faturas dessa unidade nesse período. Escolha outro período ou **Todas as unidades**.", icon=":material/filter_alt_off:")
         return
 
     c1, c2, c3 = st.columns(3)
-    c1.metric("Conta sem a usina", graficos.rs(c.sem_usina))
-    c2.metric("Conta real", graficos.rs(c.real), delta=f"-{graficos.rs(c.economia)}", delta_color="inverse")
-    c3.metric("Economia", f"{100 * c.economia / c.sem_usina:.0f}% da conta" if c.sem_usina else "—")
+    c1.metric("Conta sem a usina", graficos.rs(c.sem_usina), border=True)
+    c2.metric("Conta real", graficos.rs(c.real), delta=f"-{graficos.rs(c.economia)}", delta_color="inverse", border=True)
+    c3.metric("Economia", f"{100 * c.economia / c.sem_usina:.0f}% da conta" if c.sem_usina else "—", border=True)
 
     st.plotly_chart(graficos_analise.grafico_cascata(c), width="stretch")
     nao_evitavel = c.fio_b + c.beneficio_scee + c.cip + c.bandeira
