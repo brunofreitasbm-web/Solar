@@ -5,8 +5,9 @@ from importlib import import_module
 
 import streamlit as st
 
+from solar.faturas import pendentes as fila
+
 CHAVE_PAGINAS = "_paginas_registradas"
-CHAVE_PENDENTES = "faturas_pendentes"
 
 # (grupo, módulo, título, ícone, url)
 ROTAS = (
@@ -14,7 +15,9 @@ ROTAS = (
     ("Operações", "revisao_pg", "Revisar leitura", ":material/fact_check:", "revisar-leitura"),
     ("Operações", "rateio_pg", "Rateio de créditos", ":material/swap_horiz:", "rateio-creditos"),
     ("Visão Geral", "dashboard_pg", "Dashboard", ":material/dashboard:", "dashboard"),
+    ("Visão Geral", "auditoria_pg", "Auditoria da fatura", ":material/rule:", "auditoria-fatura"),
     ("Visão Geral", "composicao_pg", "Composição da conta", ":material/pie_chart:", "composicao-conta"),
+    ("Visão Geral", "faturas_pg", "Faturas", ":material/receipt_long:", "faturas"),
     ("Visão Geral", "unidades_pg", "Unidades", ":material/home:", "unidades"),
     ("Visão Geral", "vencimentos_pg", "Vencimentos", ":material/calendar_month:", "vencimentos"),
     ("Planejamento", "simulador_pg", "Simulador", ":material/calculate:", "simulador"),
@@ -33,7 +36,7 @@ def _renderizador(modulo: str):
 
 
 def _titulo(modulo: str, titulo: str) -> str:
-    pendentes = len(st.session_state.get(CHAVE_PENDENTES, []))
+    pendentes = fila.contar()
     return f"{titulo} ({pendentes})" if modulo == "revisao_pg" and pendentes else titulo
 
 
