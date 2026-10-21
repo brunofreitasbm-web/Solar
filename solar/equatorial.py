@@ -1,5 +1,7 @@
+import json
 import os
 import shutil
+import subprocess
 import time
 from pathlib import Path
 from typing import Callable
@@ -8,12 +10,34 @@ from solar import config
 from solar.faturas.extracao import ResultadoExtracao, extrair
 from solar.faturas.importacao import salvar_se_completa
 
-import subprocess
-
 PASTA_PERFIL = config.PASTA_DADOS / "perfil_equatorial"
 PASTA_DOWNLOADS = config.PASTA_PDFS / "equatorial"
+ARQUIVO_SESSAO = PASTA_PERFIL / "sessao.json"
 URL_AGENCIA = "https://agenciavirtual.equatorialenergia.com.br/Login/"
 URL_SSO = "https://auth.equatorialenergia.com.br/"
+
+
+def _salvar_status_sessao(autenticado: bool) -> None:
+    """Registra em disco o estado do último login realizado com sucesso."""
+    try:
+        PASTA_PERFIL.mkdir(parents=True, exist_ok=True)
+        ARQUIVO_SESSAO.write_text(
+            json.dumps({"autenticado": autenticado, "atualizado_em": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+
+def tem_sessao_salva() -> bool:
+    """Verifica de forma rápida e segura se há um registro de login salvo na máquina."""
+    if not ARQUIVO_SESSAO.exists():
+        return False
+    try:
+        dados = json.loads(ARQUIVO_SESSAO.read_text(encoding="utf-8"))
+        return bool(dados.get("autenticado"))
+    except Exception:
+        return False
 
 
 def _limpar_processos_residuais():
@@ -102,7 +126,7 @@ def abrir_sessao_login() -> str:
 
             # Se já estiver na tela inicial, tenta clicar no botão Entrar para adiantar
             try:
-                btn_entrar = page.locator("button:has-text('Entrar')").first
+                btn_entrar = page.locator("button:has-text('Entrar'), a:has-text('Entrar'), [role='button']:has-text('Entrar'), text='Entrar'").first
                 if btn_entrar.is_visible(timeout=3000):
                     btn_entrar.click()
             except Exception:
@@ -123,7 +147,8 @@ def abrir_sessao_login() -> str:
                     break
                 time.sleep(1)
 
-            return "Sessão iniciada e salva com sucesso." if logado else "Janela finalizada. Faça o login para memorizar a sessão."
+            _salvar_status_sessao(logado)
+            return "Sessão iniciada e salva com sucesso!" if logado else "Janela finalizada. Faça o login para memorizar a sessão."
         finally:
             try:
                 context.close()
@@ -134,7 +159,7 @@ def abrir_sessao_login() -> str:
 
 def verificar_autenticado() -> bool:
     """Checa de forma rápida se a sessão atual ainda está válida."""
-    if not PASTA_PERFIL.exists():
+    if not tem_sessao_salva():
         return False
     from playwright.sync_api import sync_playwright
 
@@ -146,7 +171,9 @@ def verificar_autenticado() -> bool:
                 page.goto(URL_AGENCIA, timeout=20000)
                 page.wait_for_timeout(3000)
                 url_atual = page.url.lower()
-                return "agenciavirtual" in url_atual and "login" not in url_atual and "auth" not in url_atual
+                valido = "agenciavirtual" in url_atual and "login" not in url_atual and "auth" not in url_atual
+                _salvar_status_sessao(valido)
+                return valido
             finally:
                 try:
                     context.close()
@@ -184,23 +211,49 @@ def baixar_faturas_equatorial(
             # Se não estiver logado, clica no login
             if "auth.equatorialenergia" in page.url or "login" in page.url.lower():
                 try:
-                    btn_entrar = page.locator("button:has-text('Entrar')").first
+                    btn_entrar = page.locator("button:has-text('Entrar'), a:has-text('Entrar'), [role='button']:has-text('Entrar'), text='Entrar'").first
                     if btn_entrar.is_visible(timeout=2000):
                         btn_entrar.click()
                         page.wait_for_timeout(3000)
                 except Exception:
                     pass
 
-                if "auth.equatorialenergia" in page.url:
-                    _avisar("Aguardando login no navegador…")
-                    # Espera até 90 segundos caso o usuário precise confirmar credencial
-                    page.wait_for_url(lambda u: "agenciavirtual" in u and "login" not in u and "auth" not in u, timeout=90000)
+                # Se ainda estiver na tela de login ou auth
+                if "auth.equatorialenergia" in page.url or "login" in page.url.lower():
+                    if headless:
+                        raise RuntimeError(
+                            "A sessão da Equatorial expirou ou ainda não foi configurada neste computador. "
+                            "Marque a opção 'Abrir janela visível do navegador' ou clique em 'Conectar na Equatorial' para se autenticar."
+                        )
+
+                    _avisar("Aguardando login no navegador… Conclua a identificação na janela aberta.")
+                    inicio_login = time.time()
+                    logado = False
+                    while time.time() - inicio_login < 90:
+                        if page.is_closed():
+                            break
+                        try:
+                            url_atual = page.url.lower()
+                            if "agenciavirtual" in url_atual and "login" not in url_atual and "auth" not in url_atual:
+                                logado = True
+                                _salvar_status_sessao(True)
+                                break
+                        except Exception:
+                            pass
+                        time.sleep(1)
+
+                    if not logado:
+                        if page.is_closed():
+                            raise RuntimeError("A janela do navegador foi fechada antes da confirmação do login na Equatorial.")
+                        raise RuntimeError(
+                            "Tempo limite para login na Equatorial esgotado (90s). "
+                            "Conclua a digitação das suas credenciais na janela aberta e tente novamente."
+                        )
 
             _avisar("Localizando contas e faturas…")
             # Abre menu ou área de faturas
             try:
-                # Tenta clicar no menu Contas ou Segunda Via
-                menu_contas = page.locator("text='Contas de luz'").first
+                menu_contas = page.locator("text='Contas e consumo', text='Contas de luz', text='Segunda via', text='2ª Via', text='Faturas'").first
                 if menu_contas.is_visible(timeout=3000):
                     menu_contas.click()
             except Exception:
@@ -209,7 +262,7 @@ def baixar_faturas_equatorial(
             page.wait_for_timeout(4000)
 
             # Procura botões ou links de PDF / Baixar / 2ª via
-            locators_fatura = page.locator("button:has-text('Baixar'), a:has-text('Baixar'), button:has-text('PDF'), a:has-text('PDF'), [title*='fatura'], [title*='Fatura']")
+            locators_fatura = page.locator("button:has-text('Baixar'), a:has-text('Baixar'), button:has-text('PDF'), a:has-text('PDF'), [title*='fatura'], [title*='Fatura'], [aria-label*='Baixar'], [aria-label*='fatura']")
             total_encontrados = locators_fatura.count()
             _avisar(f"Encontrados {total_encontrados} elemento(s) de download.")
 

@@ -44,20 +44,28 @@ def _processar(nome_bytes: list[tuple[str, bytes]], salvar_direto: bool) -> None
 def _status_conexao() -> None:
     col_status, col_acao = st.columns([2, 1], vertical_alignment="center")
     with col_status:
-        if equatorial.PASTA_PERFIL.exists():
-            st.success("Acesso à Equatorial configurado neste computador.", icon=":material/verified_user:")
+        if equatorial.tem_sessao_salva():
+            st.success("Sessão da Equatorial conectada neste computador.", icon=":material/verified_user:")
         else:
-            st.info("**Passo 1:** conecte sua conta uma única vez. A sessão fica salva para os próximos meses.",
-                    icon=":material/link:")
+            st.warning("**Passo 1 obrigatório:** conecte sua conta uma primeira vez para salvar o acesso.",
+                       icon=":material/login:")
     with col_acao:
-        if st.button("Conectar na Equatorial", icon=":material/login:", width="stretch",
-                     help="Abre uma janela do Chrome para você fazer o login da Equatorial uma única vez."):
-            with st.spinner("Abrindo janela de login da Equatorial…"):
+        rotulo_btn = "Reconectar conta" if equatorial.tem_sessao_salva() else "Conectar na Equatorial"
+        if st.button(rotulo_btn, icon=":material/login:", width="stretch",
+                     help="Abre uma janela do navegador para você digitar CPF/senha da Equatorial e salvar a sessão."):
+            with st.spinner("Abrindo janela do navegador… Conclua seu login na janela da Equatorial."):
                 ui.avisar(equatorial.abrir_sessao_login(), ":material/info:")
             st.rerun()
 
 
 def _baixar(salvar_auto: bool, modo_visivel: bool) -> None:
+    if not equatorial.tem_sessao_salva() and not modo_visivel:
+        st.warning(
+            "Você ainda não conectou sua conta da Equatorial. "
+            "Clique em **Conectar na Equatorial** acima ou marque **Abrir janela visível do navegador** para entrar com suas credenciais.",
+            icon=":material/warning:",
+        )
+        return
     status_box = st.empty()
     barra = st.progress(0.1, text="Conectando à Equatorial…")
     try:
