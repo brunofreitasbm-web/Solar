@@ -1,0 +1,119 @@
+import json
+import sqlite3
+from contextlib import contextmanager
+from datetime import datetime
+
+from solar.config import CAMINHO_DB
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS unidades (
+    uc TEXT PRIMARY KEY,
+    apelido TEXT NOT NULL DEFAULT '',
+    endereco TEXT NOT NULL DEFAULT '',
+    geradora INTEGER NOT NULL DEFAULT 0,
+    kwp REAL,
+    lat REAL,
+    lon REAL,
+    data_pedido_conexao TEXT
+);
+CREATE TABLE IF NOT EXISTS faturas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    uc TEXT NOT NULL REFERENCES unidades(uc),
+    mes_ref TEXT NOT NULL,
+    consumo_kwh REAL NOT NULL DEFAULT 0,
+    injetado_kwh REAL NOT NULL DEFAULT 0,
+    compensado_kwh REAL NOT NULL DEFAULT 0,
+    saldo_creditos_kwh REAL NOT NULL DEFAULT 0,
+    credito_rs REAL,
+    tarifa_kwh REAL,
+    total_rs REAL NOT NULL DEFAULT 0,
+    bandeira TEXT NOT NULL DEFAULT '',
+    arquivo TEXT NOT NULL DEFAULT '',
+    origem TEXT NOT NULL DEFAULT 'manual',
+    UNIQUE (uc, mes_ref)
+);
+CREATE TABLE IF NOT EXISTS usinas_planejadas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    nome TEXT NOT NULL,
+    endereco TEXT NOT NULL DEFAULT '',
+    uc TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'Em instalação',
+    paineis INTEGER NOT NULL,
+    potencia_painel_w REAL NOT NULL,
+    inversor TEXT NOT NULL DEFAULT '',
+    potencia_inversor_kw REAL NOT NULL DEFAULT 0,
+    custo_total REAL,
+    valor_financiado REAL,
+    parcela_mensal REAL,
+    qtd_parcelas INTEGER,
+    data_operacao TEXT,
+    consumo_kwh_mes REAL,
+    simultaneidade REAL NOT NULL DEFAULT 0.4,
+    lat REAL,
+    lon REAL
+);
+CREATE TABLE IF NOT EXISTS config (
+    chave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS faturas_pendentes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    arquivo TEXT NOT NULL UNIQUE,
+    dados_json TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS cache_web (
+    chave TEXT PRIMARY KEY,
+    valor TEXT NOT NULL,
+    atualizado_em TEXT NOT NULL
+);
+"""
+
+# Colunas acrescentadas depois da primeira versão — aplicadas por migração, sem apagar dados.
+COLUNAS_FATURAS_NOVAS = (
+    ("vencimento", "TEXT"), ("emissao", "TEXT"), ("proxima_leitura", "TEXT"),
+    ("consumo_rs", "REAL"), ("fio_b_rs", "REAL"), ("beneficio_rs", "REAL"),
+    ("bandeira_rs", "REAL"), ("cip_rs", "REAL"), ("multa_rs", "REAL"),
+    ("juros_rs", "REAL"), ("outros_rs", "REAL"), ("rateio_json", "TEXT"),
+    ("pix_copia_cola", "TEXT"), ("codigo_barras", "TEXT"),
+    ("pago_em", "TEXT"), ("valor_pago", "REAL"),
+)
+
+
+def _migrar(con: sqlite3.Connection) -> None:
+    existentes = {l["name"] for l in con.execute("PRAGMA table_info(faturas)")}
+    for nome, tipo in COLUNAS_FATURAS_NOVAS:
+        if nome not in existentes:
+            con.execute(f"ALTER TABLE faturas ADD COLUMN {nome} {tipo}")
+    con.execute(
+        """UPDATE unidades SET data_pedido_conexao =
+           substr(data_pedido_conexao, 1, 4) || '-' || substr(data_pedido_conexao, 5, 2) || '-' || substr(data_pedido_conexao, 7, 2)
+           WHERE data_pedido_conexao GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'"""
+    )
+
+
+@contextmanager
+def conexao():
+    CAMINHO_DB.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(CAMINHO_DB)
+    con.row_factory = sqlite3.Row
+    try:
+        con.executescript(SCHEMA)
+        _migrar(con)
+        yield con
+        con.commit()
+    finally:
+        con.close()
+
+
+def ler_cache(chave: str) -> tuple[object, str] | None:
+    with conexao() as con:
+        linha = con.execute("SELECT valor, atualizado_em FROM cache_web WHERE chave = ?", (chave,)).fetchone()
+    return (json.loads(linha["valor"]), linha["atualizado_em"]) if linha else None
+
+
+def gravar_cache(chave: str, valor: object) -> None:
+    with conexao() as con:
+        con.execute(
+            "INSERT OR REPLACE INTO cache_web (chave, valor, atualizado_em) VALUES (?, ?, ?)",
+            (chave, json.dumps(valor), datetime.now().isoformat(timespec="seconds")),
+        )

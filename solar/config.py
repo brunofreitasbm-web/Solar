@@ -1,9 +1,13 @@
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-RAIZ = Path(__file__).resolve().parent.parent
+if getattr(sys, "frozen", False):
+    RAIZ = Path(sys.executable).resolve().parent
+else:
+    RAIZ = Path(__file__).resolve().parent.parent
 PASTA_DADOS = RAIZ / "data"
 PASTA_PDFS = PASTA_DADOS / "pdfs"
 CAMINHO_DB = PASTA_DADOS / "solar.db"
