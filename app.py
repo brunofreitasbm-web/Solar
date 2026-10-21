@@ -2,7 +2,7 @@ from pathlib import Path
 
 import streamlit as st
 
-from paginas import navegacao, ui
+from paginas import navegacao, painel_dados, ui
 from solar import backup, configuracoes
 
 ASSETS = Path(__file__).parent / "assets"
@@ -29,11 +29,13 @@ def _backup_automatico() -> None:
 def _barra_lateral() -> None:
     st.logo(str(ASSETS / "logo.svg"), icon_image=str(ASSETS / "icone.svg"), size="large")
     with st.sidebar:
-        pendentes = len(st.session_state.get(navegacao.CHAVE_PENDENTES, []))
-        if pendentes:
+        lista = painel_dados.alertas_atuais(painel_dados.carregar())
+        if lista:
+            graves = sum(a.gravidade == "erro" for a in lista)
+            cor = "red" if graves else "orange"
             with st.container(border=True):
-                st.markdown(f":orange[:material/pending_actions:] **{pendentes} fatura(s)** esperando sua revisão")
-                ui.link_para("revisar-leitura", "Revisar agora")
+                st.markdown(f":{cor}[:material/notifications_active:] **{len(lista)} alerta(s)** pedem atenção")
+                ui.link_para("dashboard", "Ver alertas")
 
 
 _backup_automatico()

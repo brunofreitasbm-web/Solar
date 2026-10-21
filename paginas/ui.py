@@ -25,6 +25,13 @@ def link_para(url: str, rotulo: str | None = None) -> None:
     st.page_link(navegacao.pagina(url), label=rotulo)
 
 
+def painel_alertas(lista) -> None:
+    for a in lista:
+        mostrar = st.error if a.gravidade == "erro" else st.warning
+        mostrar(a.texto, icon=":material/error:" if a.gravidade == "erro" else ":material/warning:")
+        link_para(a.pagina, a.rotulo)
+
+
 def estado_vazio(mensagem: str, url: str, rotulo: str) -> None:
     """Mensagem útil + o atalho para resolver, para o usuário nunca ficar sem saída."""
     with st.container(border=True):

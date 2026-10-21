@@ -53,7 +53,8 @@ def mes_payback_projetado(
         return None
     acumulado = resumo["economia_rs"].sum()
     if acumulado >= investimento:
-        return resumo["mes_ref"].iloc[0]
+        acumulada = resumo["economia_rs"].cumsum()
+        return resumo.loc[acumulada >= investimento, "mes_ref"].iloc[0]
     futuro = serie_futura(resumo, 600, reajuste_tarifa_anual, degradacao_anual, modelo, escalar_fio_b, meses_base)
     for mes, economia in futuro:
         acumulado += economia

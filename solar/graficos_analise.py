@@ -176,3 +176,27 @@ def grafico_geracao_prevista(base: list[float], rotulo_base: str, alternativa: l
     fig.update_yaxes(gridcolor=COR_GRADE, ticksuffix=" kWh", separatethousands=True, rangemode="tozero")
     fig.update_xaxes(**eixo_x_categoria())
     return fig
+
+
+def grafico_heatmap(df: pd.DataFrame, coluna: str, titulo: str, subtitulo: str, sufixo: str, escala: str) -> go.Figure:
+    """Unidades nas linhas, meses nas colunas: mostra de relance onde e quando o valor foge do normal."""
+    grade = df.pivot_table(index="unidade", columns="mes_ref", values=coluna, aggfunc="sum").sort_index(axis=1)
+    fig = go.Figure(go.Heatmap(
+        z=grade.values, x=[mes_legivel(m) for m in grade.columns], y=list(grade.index), colorscale=escala,
+        hovertemplate="%{y}<br>%{x}: %{z:,.0f}" + sufixo + "<extra></extra>", colorbar=dict(ticksuffix=sufixo.strip()),
+    ))
+    fig.update_layout(**layout_base(titulo, subtitulo))
+    fig.update_xaxes(**eixo_x_categoria())
+    return fig
+
+
+def grafico_saldo_creditos(df: pd.DataFrame) -> go.Figure:
+    """Saldo de créditos (kWh) de cada unidade mês a mês."""
+    fig = go.Figure()
+    for unidade, grupo in df.sort_values("mes_ref").groupby("unidade"):
+        fig.add_scatter(x=[mes_legivel(m) for m in grupo["mes_ref"]], y=grupo["saldo_creditos_kwh"], mode="lines+markers", name=unidade,
+                        hovertemplate=unidade + "<br>%{x}: %{y:,.0f} kWh<extra></extra>")
+    fig.update_layout(**layout_base("Saldo de créditos por unidade", "crédito de energia guardado no fim de cada mês; vence em 60 meses"))
+    fig.update_yaxes(gridcolor=COR_GRADE, ticksuffix=" kWh", separatethousands=True)
+    fig.update_xaxes(**eixo_x_categoria())
+    return fig

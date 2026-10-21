@@ -1,7 +1,10 @@
 import streamlit as st
 
 from paginas import painel_dados, ui
-from solar import graficos, vencimentos
+from datetime import date
+
+from solar import graficos, pagamentos, vencimentos
+from solar.faturas import repositorio
 
 
 def _situacao(linha) -> str:
@@ -14,6 +17,26 @@ def _situacao(linha) -> str:
     else:
         texto = f"venceu há {-linha.dias} dias — confirme o pagamento"
     return texto + (" · fatura ainda não carregada" if linha.aguardando_fatura else "")
+
+
+def _a_pagar(p: painel_dados.Painel) -> None:
+    st.subheader("Faturas a pagar")
+    abertas = pagamentos.a_pagar(p.df, p.nomes)
+    if abertas.empty:
+        st.success("Todas as faturas carregadas estão pagas.", icon=":material/check_circle:")
+        return
+    st.caption("Última fatura carregada de cada unidade que ainda não foi marcada como paga.")
+    for l in abertas.itertuples():
+        situacao = f"venceu há {-l.dias} dias" if l.vencida else ("vence hoje" if l.dias == 0 else f"vence em {l.dias} dias")
+        with st.container(border=True):
+            c1, c2 = st.columns([3, 2], vertical_alignment="center")
+            c1.markdown(f"**{l.unidade}** · fatura {l.mes_ref} · {graficos.rs(l.total_rs, 2)}  \n"
+                        f"{':red[' + situacao + ']' if l.vencida else situacao} ({l.vencimento.strftime('%d/%m/%Y')})")
+            if c2.button("Marcar como paga", key=f"paga_{l.uc}_{l.mes_ref}", icon=":material/check:", width="stretch"):
+                repositorio.marcar_paga(l.uc, l.mes_ref, date.today().isoformat(), l.total_rs)
+                st.cache_data.clear()
+                ui.avisar(f"Fatura {l.mes_ref} de {l.unidade} marcada como paga.")
+                st.rerun()
 
 
 def render() -> None:
@@ -36,6 +59,7 @@ def render() -> None:
                    ". Envie os PDFs para manter o histórico sem buracos.", icon=":material/upload_file:")
         ui.link_para("enviar-faturas", "Enviar faturas")
 
+    _a_pagar(p)
     previsoes = previsoes.assign(situacao=[_situacao(l) for l in previsoes.itertuples()])
     st.dataframe(
         previsoes, width="stretch", hide_index=True,

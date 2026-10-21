@@ -1,31 +1,11 @@
 import streamlit as st
 
-from paginas import painel_dados, ui
-from solar import benchmarks, creditos, financiamento, geracao, graficos, graficos_analise, projecao, roi, vencimentos
+from paginas import analise_unidades, painel_dados, ui
+from solar import benchmarks, creditos, financiamento, graficos, graficos_analise, projecao, roi, saude
 
 
 def _mes(mes: str | None) -> str:
     return graficos_analise.mes_legivel_ou_traco(mes)
-
-
-def _quando(dias: int) -> str:
-    if dias == 0:
-        return "hoje"
-    if dias == 1:
-        return "amanhã"
-    if dias == -1:
-        return "ontem"
-    return f"em {dias} dias" if dias > 0 else f"há {-dias} dias"
-
-
-def _aviso_vencimentos(p: painel_dados.Painel) -> None:
-    previsoes = vencimentos.proximos_vencimentos(p.df, p.nomes)
-    proximas = previsoes[(previsoes["dias"] <= 7)]
-    if proximas.empty:
-        return
-    itens = ", ".join(f"{l.unidade} ({_quando(l.dias)})" for l in proximas.itertuples())
-    st.warning(f"Faturas previstas para esta semana: {itens}.", icon=":material/event_upcoming:")
-    ui.link_para("vencimentos", "Ver vencimentos e criar lembretes")
 
 
 def _kpis(p: painel_dados.Painel, acumulado, payback_previsto: str | None) -> None:
@@ -145,27 +125,30 @@ def _tabelas_creditos_e_geracao(p: painel_dados.Painel) -> None:
     geradoras = p.df[p.df["geradora"]]
     if geradoras.empty:
         return
-    alertas = geracao.avaliar_geracao(geradoras, p.cfg.performance_ratio)
+    alertas = saude.avaliar(geradoras, p.cfg.performance_ratio)
     if alertas.empty:
         return
     st.subheader("Geração real vs. esperada")
-    alertas = alertas.assign(razao_pct=alertas["razao"] * 100)
+    st.caption("A fatura mostra só a energia injetada na rede (sem o que a unidade consome na hora), por isso a % do esperado fica abaixo de 100%. O alerta compara cada usina com o próprio histórico.")
+    alertas = alertas.assign(razao_pct=alertas["razao"] * 100, relativa_pct=alertas["razao_relativa"] * 100)
     st.dataframe(
         alertas, width="stretch", hide_index=True,
-        column_order=["uc", "mes_ref", "geracao_real_kwh", "geracao_esperada_kwh", "razao_pct", "alerta"],
+        column_order=["uc", "mes_ref", "geracao_real_kwh", "geracao_esperada_kwh", "razao_pct", "relativa_pct", "alerta"],
         column_config={
             "uc": st.column_config.TextColumn("UC"), "mes_ref": st.column_config.TextColumn("Mês"),
             "geracao_real_kwh": st.column_config.NumberColumn("Geração real", format="%.0f kWh"),
             "geracao_esperada_kwh": st.column_config.NumberColumn("Geração esperada", format="%.0f kWh"),
             "razao_pct": st.column_config.ProgressColumn("% do esperado", format="%.0f%%", min_value=0, max_value=120),
-            "alerta": st.column_config.CheckboxColumn("Abaixo do esperado"),
+            "relativa_pct": st.column_config.ProgressColumn("vs. histórico da usina", format="%.0f%%", min_value=0, max_value=150,
+                                                            help="Compara com o que a própria usina costuma render. Abaixo de 80% é alerta."),
+            "alerta": st.column_config.CheckboxColumn("Abaixo do normal"),
             "razao": None,
         },
         alt="Tabela comparando geração real e esperada por mês",
     )
     baixas = alertas[alertas["alerta"]]
     if not baixas.empty:
-        st.warning(f"{len(baixas)} mês(es) com geração abaixo do esperado — verifique sujeira nos painéis ou inversor.",
+        st.warning(f"{len(baixas)} mês(es) com geração abaixo do normal da usina — verifique sujeira nos painéis ou inversor.",
                    icon=":material/solar_power:")
 
 
@@ -198,7 +181,7 @@ def render() -> None:
         st.error("Não consegui consultar a tarifa da ANEEL agora, então a economia das faturas sem linha de consumo ficou aproximada. "
                  "Tente **Atualizar tarifa** em Configurações mais tarde.", icon=":material/cloud_off:")
 
-    _aviso_vencimentos(p)
+    ui.painel_alertas(painel_dados.alertas_atuais(p))
     acumulado = roi.serie_acumulada(p.resumo, cfg.investimento_total)
     pb_com, eq_com, pb_sem = _projecao_e_premissas(p) if cfg.completo and p.modelo else (None, None, None)
     _kpis(p, acumulado, pb_com)
@@ -230,3 +213,4 @@ def render() -> None:
     if p.modelo:
         _premissas_medidas(p)
     _tabelas_creditos_e_geracao(p)
+    analise_unidades.render(p)

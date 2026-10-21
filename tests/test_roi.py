@@ -33,4 +33,4 @@ def test_payback_projetado_usa_tendencia_recente():
 
 def test_payback_projetado_ja_atingido():
     resumo = pd.DataFrame({"mes_ref": ["2025-01", "2025-02"], "economia_rs": [600.0, 600.0]})
-    assert roi.mes_payback_projetado(resumo, investimento=1000) == "2025-01"
+    assert roi.mes_payback_projetado(resumo, investimento=1000) == "2025-02"

@@ -6,10 +6,10 @@ from dataclasses import dataclass
 import pandas as pd
 import streamlit as st
 
-from solar import configuracoes, economia, geracao, projecao, unidades
+from solar import alertas, configuracoes, economia, geracao, projecao, unidades
 from solar.config import CAMINHO_DB
 from solar.configuracoes import Configuracoes
-from solar.faturas import repositorio
+from solar.faturas import pendentes as fila, repositorio
 from solar.projecao import ModeloEconomia
 from solar.tarifa import aneel
 
@@ -54,3 +54,10 @@ def _calcular(versao_banco: int) -> Painel | None:
 def carregar() -> Painel | None:
     """Os cálculos só se repetem quando o arquivo do banco muda."""
     return _calcular(CAMINHO_DB.stat().st_mtime_ns if CAMINHO_DB.exists() else 0)
+
+
+def alertas_atuais(p: Painel | None) -> list[alertas.Alerta]:
+    em_revisao = fila.contar()
+    if p is None:
+        return alertas.reunir(repositorio.tabela().iloc[0:0], {}, 0.0, em_revisao)
+    return alertas.reunir(p.df, p.nomes, p.cfg.performance_ratio, em_revisao)

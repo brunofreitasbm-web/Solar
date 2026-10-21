@@ -1,0 +1,11 @@
+{
+  "name": "solar-roi",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App Streamlit para análise e ROI de energia solar",
+  "scripts": {
+    "dev": ".venv\\Scripts\\streamlit run app.py",
+    "start": ".venv\\Scripts\\streamlit run app.py",
+    "test": ".venv\\Scripts\\python -m pytest"
+  }
+}

@@ -56,6 +56,11 @@ CREATE TABLE IF NOT EXISTS config (
     chave TEXT PRIMARY KEY,
     valor TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS faturas_pendentes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    arquivo TEXT NOT NULL UNIQUE,
+    dados_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS cache_web (
     chave TEXT PRIMARY KEY,
     valor TEXT NOT NULL,
@@ -70,6 +75,7 @@ COLUNAS_FATURAS_NOVAS = (
     ("bandeira_rs", "REAL"), ("cip_rs", "REAL"), ("multa_rs", "REAL"),
     ("juros_rs", "REAL"), ("outros_rs", "REAL"), ("rateio_json", "TEXT"),
     ("pix_copia_cola", "TEXT"), ("codigo_barras", "TEXT"),
+    ("pago_em", "TEXT"), ("valor_pago", "REAL"),
 )
 
 
@@ -78,6 +84,11 @@ def _migrar(con: sqlite3.Connection) -> None:
     for nome, tipo in COLUNAS_FATURAS_NOVAS:
         if nome not in existentes:
             con.execute(f"ALTER TABLE faturas ADD COLUMN {nome} {tipo}")
+    con.execute(
+        """UPDATE unidades SET data_pedido_conexao =
+           substr(data_pedido_conexao, 1, 4) || '-' || substr(data_pedido_conexao, 5, 2) || '-' || substr(data_pedido_conexao, 7, 2)
+           WHERE data_pedido_conexao GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'"""
+    )
 
 
 @contextmanager

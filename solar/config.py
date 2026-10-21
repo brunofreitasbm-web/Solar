@@ -1,10 +1,14 @@
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
+
 RAIZ = Path(__file__).resolve().parent.parent
 PASTA_DADOS = RAIZ / "data"
 PASTA_PDFS = PASTA_DADOS / "pdfs"
 CAMINHO_DB = PASTA_DADOS / "solar.db"
+
+load_dotenv(RAIZ / ".env")
 
 DISTRIBUIDORA_ANEEL = "EQUATORIAL PA"
 ANEEL_URL = "https://dadosabertos.aneel.gov.br/api/3/action/datastore_search"

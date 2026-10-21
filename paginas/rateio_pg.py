@@ -3,7 +3,7 @@ from datetime import date
 import streamlit as st
 
 from paginas import painel_dados, ui
-from solar import graficos, graficos_analise, rateio, rateio_pdf
+from solar import config, graficos, graficos_analise, rateio, rateio_pdf
 
 USINAS_GERADORAS = ("231236701340", "458420701358")
 
@@ -28,7 +28,7 @@ def _botao_lista(uc_geradora: str, itens: list[dict]) -> None:
     # Gerado só no clique: o PDF não precisa ser redesenhado a cada ajuste de filtro.
     def _gerar() -> bytes:
         return rateio_pdf.desenhar_pdf_rateio(
-            caminho_saida=f"data/rateio/{nome_arquivo}", conta_contrato_geradora=info["conta_contrato"],
+            caminho_saida=str(config.PASTA_DADOS / "rateio" / nome_arquivo), conta_contrato_geradora=info["conta_contrato"],
             local_solicitacao=info["municipio"], data_solicitacao=date.today().strftime("%d/%m/%Y"), itens_rateio=itens,
         ).read_bytes()
 

@@ -2,20 +2,20 @@ from pathlib import Path
 
 import streamlit as st
 
-from paginas import navegacao, ui
+from paginas import ui
 from solar import equatorial
+from solar.faturas import pendentes as fila
 from solar.faturas.extracao import extrair
 from solar.faturas.importacao import salvar_se_completa
 
 
 def _processar(nome_bytes: list[tuple[str, bytes]], salvar_direto: bool) -> None:
-    pendentes = st.session_state.setdefault(navegacao.CHAVE_PENDENTES, [])
     processados = st.session_state.setdefault("arquivos_processados", set())
 
     novos = [(nome, b) for nome, b in nome_bytes if nome not in processados]
     if not novos:
         st.info(f"{len(nome_bytes)} arquivo(s) já lido(s) nesta sessão.", icon=":material/done_all:")
-        if pendentes:
+        if fila.contar():
             ui.link_para("revisar-leitura", "Ver a fila de revisão")
         return
 
@@ -27,7 +27,7 @@ def _processar(nome_bytes: list[tuple[str, bytes]], salvar_direto: bool) -> None
         if salvar_direto and salvar_se_completa(resultado):
             salvas += 1
         else:
-            pendentes.append(resultado)
+            fila.adicionar(resultado)
         processados.add(nome)
     barra.empty()
     st.cache_data.clear()

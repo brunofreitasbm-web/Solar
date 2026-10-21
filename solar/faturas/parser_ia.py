@@ -18,6 +18,11 @@ INSTRUCOES = """Você recebe uma fatura de energia elétrica brasileira (Equator
 - total_rs: valor total a pagar em R$.
 - bandeira: bandeira tarifária do mês (Verde, Amarela, Vermelha P1, Vermelha P2) ou "".
 - endereco: endereço da unidade consumidora ou "".
+- vencimento, emissao, proxima_leitura: datas no formato AAAA-MM-DD, ou "" se não constarem.
+- fio_b_rs: valor em R$ da linha "Parc. Inj. s/ Desc. - GD2" (Fio B da energia compensada); null se não houver.
+- cip_rs: contribuição de iluminação pública em R$; null se não houver.
+- multa_rs, juros_rs: multa e juros/correção monetária de faturas anteriores cobrados nesta; null se não houver.
+- pix_copia_cola: texto "copia e cola" do Pix, ou "".
 Use null só onde indicado; nunca invente valores."""
 
 ESQUEMA = {
@@ -34,10 +39,19 @@ ESQUEMA = {
         "total_rs": {"type": "number"},
         "bandeira": {"type": "string"},
         "endereco": {"type": "string"},
+        "vencimento": {"type": "string"},
+        "emissao": {"type": "string"},
+        "proxima_leitura": {"type": "string"},
+        "fio_b_rs": {"type": ["number", "null"]},
+        "cip_rs": {"type": ["number", "null"]},
+        "multa_rs": {"type": ["number", "null"]},
+        "juros_rs": {"type": ["number", "null"]},
+        "pix_copia_cola": {"type": "string"},
     },
     "required": [
         "uc", "mes_ref", "consumo_kwh", "injetado_kwh", "compensado_kwh", "saldo_creditos_kwh",
         "credito_rs", "tarifa_kwh", "total_rs", "bandeira", "endereco",
+        "vencimento", "emissao", "proxima_leitura", "fio_b_rs", "cip_rs", "multa_rs", "juros_rs", "pix_copia_cola",
     ],
     "additionalProperties": False,
 }

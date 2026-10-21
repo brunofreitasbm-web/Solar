@@ -11,6 +11,10 @@ from solar.datas import mes_ref, somar_meses
 
 PRAZO_PADRAO_DIAS = 7  # emissão → vencimento quando não há fatura anterior para medir
 DIAS_PARA_CONSIDERAR_FATURA_ATRASADA = 5
+COLUNAS_VENCIMENTO = [
+    "uc", "unidade", "ultima_fatura", "ultimo_vencimento", "vencimento_previsto", "dias",
+    "aguardando_fatura", "total_rs", "pix_copia_cola", "codigo_barras", "endereco",
+]
 
 
 def _data(iso: str | None) -> date | None:
@@ -51,6 +55,8 @@ def proximos_vencimentos(df: pd.DataFrame, nomes: dict[str, str], hoje: date | N
             "total_rs": total_rs, "pix_copia_cola": pix, "codigo_barras": codigo_barras,
             "endereco": endereco,
         })
+    if not linhas:
+        return pd.DataFrame(columns=COLUNAS_VENCIMENTO)
     return pd.DataFrame(linhas).sort_values("vencimento_previsto").reset_index(drop=True)
 
 

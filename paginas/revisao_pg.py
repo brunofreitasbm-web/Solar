@@ -2,9 +2,9 @@ import re
 
 import streamlit as st
 
-from paginas import navegacao, ui
+from paginas import ui
 from solar import unidades
-from solar.faturas import repositorio
+from solar.faturas import pendentes as fila, repositorio
 from solar.faturas.modelo import Fatura
 from solar.unidades import Unidade
 
@@ -14,6 +14,8 @@ CAMPOS_EDITAVEIS = (
     ("compensado_kwh", "Compensado (kWh)"), ("saldo_creditos_kwh", "Saldo de créditos (kWh)"),
     ("credito_rs", "Crédito na fatura (R$)"), ("tarifa_kwh", "Tarifa (R$/kWh)"),
     ("total_rs", "Total a pagar (R$)"), ("bandeira", "Bandeira"), ("endereco", "Endereço"),
+    ("vencimento", "Vencimento (AAAA-MM-DD)"), ("emissao", "Emissão (AAAA-MM-DD)"),
+    ("proxima_leitura", "Próxima leitura (AAAA-MM-DD)"),
 )
 MES_VALIDO = re.compile(r"^\d{4}-(0[1-9]|1[0-2])$")
 
@@ -49,7 +51,7 @@ def _salvar(fatura: Fatura, geradora: bool, existente: Unidade | None) -> None:
 
 
 def _remover_da_fila(resultado, liberar_reenvio: bool) -> None:
-    st.session_state[navegacao.CHAVE_PENDENTES].remove(resultado)
+    fila.remover(resultado.fatura.arquivo)
     if liberar_reenvio:
         st.session_state.get("arquivos_processados", set()).discard(resultado.fatura.arquivo)
 
@@ -88,7 +90,7 @@ def _cartao(i: int, resultado, unidades_existentes: dict[str, Unidade]) -> None:
 
 def render() -> None:
     st.title("Revisar leitura")
-    pendentes = st.session_state.get(navegacao.CHAVE_PENDENTES, [])
+    pendentes = fila.listar()
 
     if not pendentes:
         ui.estado_vazio("**Tudo revisado.** Nenhuma fatura esperando confirmação.", "enviar-faturas", "Enviar mais faturas")
