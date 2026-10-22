@@ -20,6 +20,7 @@ ROTAS = (
     ("Visão Geral", "faturas_pg", "Faturas", ":material/receipt_long:", "faturas"),
     ("Visão Geral", "unidades_pg", "Unidades", ":material/home:", "unidades"),
     ("Visão Geral", "vencimentos_pg", "Vencimentos", ":material/calendar_month:", "vencimentos"),
+    ("Planejamento", "ia_consultor_pg", "Consultor IA", ":material/psychology:", "consultor-ia"),
     ("Planejamento", "simulador_pg", "Simulador", ":material/calculate:", "simulador"),
     ("Planejamento", "nova_usina_pg", "Nova usina", ":material/solar_power:", "nova-usina"),
     ("Sistema", "configuracoes_pg", "Configurações", ":material/settings:", "configuracoes"),

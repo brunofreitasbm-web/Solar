@@ -11,6 +11,9 @@ datas += copy_metadata("streamlit")
 datas += collect_data_files("plotly")
 datas += collect_data_files("altair")
 datas += collect_data_files("pydeck")
+datas += collect_data_files("reportlab")
+datas += copy_metadata("reportlab")
+datas += collect_data_files("pdfplumber")
 
 # Arquivos do projeto necessários em tempo de execução
 datas += [
@@ -31,10 +34,10 @@ hiddenimports = []
 hiddenimports += collect_submodules("solar")
 hiddenimports += collect_submodules("paginas")
 hiddenimports += collect_submodules("streamlit")
+hiddenimports += collect_submodules("reportlab")
+hiddenimports += collect_submodules("pdfplumber")
 hiddenimports += [
     "anthropic",
-    "pdfplumber",
-    "reportlab",
     "openpyxl",
     "numpy_financial",
     "cv2",
