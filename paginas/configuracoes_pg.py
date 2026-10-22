@@ -5,7 +5,7 @@ from pathlib import Path
 import streamlit as st
 
 from paginas import ui
-from solar import backup, config, configuracoes
+from solar import backup, config, configuracoes, telegram
 from solar.tarifa import aneel
 
 
@@ -114,6 +114,38 @@ def _bloco_backup(cfg: configuracoes.Configuracoes) -> None:
     _historico_backups(pasta)
 
 
+def _bloco_telegram() -> None:
+    st.subheader("Aviso no Telegram")
+    st.caption("Cada fatura que entrar no histórico é enviada ao Telegram com a unidade, o valor, o Pix copia e cola "
+               "e o código de barras. Cada UC/mês é avisado uma única vez. "
+               "Para criar o bot: abra o @BotFather no Telegram, envie /newbot e copie o token.")
+    cfg = telegram.carregar()
+    token = st.text_input("Token do bot", value=cfg.token, type="password", help="Fica salvo só neste computador.").strip()
+    col_chat, col_achar = st.columns([3, 1], vertical_alignment="bottom")
+    chat_id = col_chat.text_input("ID do chat", value=cfg.chat_id, key="telegram_chat_id_campo",
+                                  help="Envie /start ao seu bot e use o botão ao lado para preencher sozinho.").strip()
+    if col_achar.button("Descobrir meu ID", disabled=not token, width="stretch"):
+        try:
+            st.session_state["telegram_chat_id_campo"] = telegram.descobrir_chat_id(token)
+            st.rerun()
+        except telegram.FalhaTelegram as erro:
+            st.error(str(erro), icon=":material/error:")
+    ativo = st.toggle("Avisar no Telegram ao importar uma fatura", value=cfg.ativo, disabled=not (token and chat_id))
+
+    novo = telegram.ConfigTelegram(token, chat_id, ativo)
+    col_salvar, col_teste = st.columns(2)
+    if col_salvar.button("Salvar Telegram", icon=":material/save:", disabled=novo == cfg, width="stretch"):
+        telegram.salvar(novo)
+        ui.avisar("Telegram configurado.")
+        st.rerun()
+    if col_teste.button("Enviar mensagem de teste", icon=":material/send:", disabled=not novo.pronto, width="stretch"):
+        try:
+            telegram.enviar("Solar ROI: o aviso de faturas por Telegram está funcionando.", novo)
+            st.success("Mensagem enviada. Confira no Telegram.", icon=":material/check_circle:")
+        except telegram.FalhaTelegram as erro:
+            st.error(str(erro), icon=":material/error:")
+
+
 def _bloco_tarifa(icms: float, pis_cofins: float) -> None:
     st.subheader("Tarifa de energia (ANEEL)")
     col_a, col_b = st.columns([3, 1], vertical_alignment="center")
@@ -139,5 +171,7 @@ def render() -> None:
     _botao_salvar(cfg, novos)
     st.divider()
     _bloco_tarifa(novos["icms"], novos["pis_cofins"])
+    st.divider()
+    _bloco_telegram()
     st.divider()
     _bloco_backup(cfg)

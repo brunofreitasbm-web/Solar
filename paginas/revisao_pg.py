@@ -3,7 +3,7 @@ import re
 import streamlit as st
 
 from paginas import ui
-from solar import unidades
+from solar import telegram, unidades
 from solar.faturas import pendentes as fila, repositorio
 from solar.faturas.modelo import Fatura
 from solar.unidades import Unidade
@@ -44,10 +44,11 @@ def _editar_fatura(fatura: Fatura, indice: int) -> Fatura:
 
 
 def _salvar(fatura: Fatura, geradora: bool, existente: Unidade | None) -> None:
-    repositorio.salvar(fatura)
     unidade = existente or Unidade(uc=fatura.uc, endereco=fatura.endereco)
     unidade.geradora = geradora
+    repositorio.salvar(fatura)
     unidades.salvar(unidade)
+    telegram.notificar_fatura(fatura)
 
 
 def _remover_da_fila(resultado, liberar_reenvio: bool) -> None:

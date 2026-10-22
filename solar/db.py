@@ -66,6 +66,12 @@ CREATE TABLE IF NOT EXISTS cache_web (
     valor TEXT NOT NULL,
     atualizado_em TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS telegram_enviados (
+    uc TEXT NOT NULL,
+    mes_ref TEXT NOT NULL,
+    enviado_em TEXT NOT NULL,
+    PRIMARY KEY (uc, mes_ref)
+);
 """
 
 # Colunas acrescentadas depois da primeira versão — aplicadas por migração, sem apagar dados.
