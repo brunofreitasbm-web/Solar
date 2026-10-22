@@ -54,7 +54,7 @@ def obter_resumo_sistema() -> dict[str, Any]:
     injetado_mensal_recente = float(ultimas["injetado_kwh"].sum()) if not ultimas.empty else 0.0
 
     economia_total_rs = float(resumo_mes["economia_rs"].sum()) if not resumo_mes.empty else 0.0
-    faturas_total_rs = float(resumo_mes["total_fatura_rs"].sum()) if not resumo_mes.empty else 0.0
+    faturas_total_rs = float(resumo_mes["total_rs"].sum()) if not resumo_mes.empty else 0.0
 
     # Financiamento
     fin = {}

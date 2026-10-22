@@ -61,7 +61,11 @@ def auditar():
         print("[*] Acessando 'Consultor IA' (via rota /consultor-ia)...", flush=True)
         page.goto(f"{URL_BASE}/consultor-ia", timeout=30000)
         page.wait_for_selector("[data-testid='stAppViewContainer']", timeout=15000)
-        time.sleep(2)
+        try:
+            page.wait_for_selector('button:has-text("Diagnóstico Completo")', timeout=60000)
+        except Exception:
+            print("  [AVISO] Conteúdo do Consultor IA não renderizou em 60s.", flush=True)
+        time.sleep(1)
         page.screenshot(path="scratch/screenshot_consultor_ia.png")
         print("  [OK] Página Consultor IA aberta. Screenshot em scratch/screenshot_consultor_ia.png", flush=True)
 
@@ -93,6 +97,21 @@ def auditar():
                     print(f"  [FALHA NO DIAGNÓSTICO] {exc}", flush=True)
             else:
                 print("  [OK] Diagnóstico Completo gerado com sucesso!", flush=True)
+
+        # Pergunta livre no chat
+        chat = page.locator('[data-testid="stChatInputTextArea"]')
+        if chat.count() > 0:
+            print("[*] Enviando pergunta no chat...", flush=True)
+            chat.first.fill("Qual a potencia total instalada?")
+            chat.first.press("Enter")
+            time.sleep(15)
+            page.screenshot(path="scratch/screenshot_chat.png")
+            excs = page.locator('[data-testid="stException"]').all_text_contents()
+            for e in excs:
+                falhas_streamlit.append(f"Chat: {e}")
+                print(f"  [FALHA NO CHAT] {e}", flush=True)
+            if not excs:
+                print("  [OK] Chat respondeu sem excecoes.", flush=True)
 
         # 3. Testa navegação nas principais abas
         rotas_principais = ["Dashboard", "Simulador", "Configurações", "Unidades"]
