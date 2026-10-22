@@ -14,6 +14,8 @@ datas += collect_data_files("pydeck")
 datas += collect_data_files("reportlab")
 datas += copy_metadata("reportlab")
 datas += collect_data_files("pdfplumber")
+# O driver Node do Playwright vive em playwright/driver e é exigido para abrir o Chrome.
+datas += collect_data_files("playwright", include_py_files=False)
 
 # Arquivos do projeto necessários em tempo de execução
 datas += [
@@ -36,6 +38,7 @@ hiddenimports += collect_submodules("paginas")
 hiddenimports += collect_submodules("streamlit")
 hiddenimports += collect_submodules("reportlab")
 hiddenimports += collect_submodules("pdfplumber")
+hiddenimports += collect_submodules("playwright")
 hiddenimports += [
     "anthropic",
     "openpyxl",
@@ -57,7 +60,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=["tkinter", "pytest", "playwright"],
+    excludes=["tkinter", "pytest"],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
