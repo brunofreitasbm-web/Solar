@@ -1,14 +1,23 @@
 from pathlib import Path
 
+from solar import telegram
 from solar.faturas import repositorio
 from solar.faturas.extracao import ResultadoExtracao, extrair
+from solar.faturas.modelo import Fatura
+
+
+def registrar(fatura: Fatura) -> None:
+    """Grava a fatura no histórico e avisa no Telegram (se ativado). Único ponto de entrada
+    de fatura fechada, para que nenhum caminho de importação esqueça a notificação."""
+    repositorio.salvar(fatura)
+    telegram.notificar_fatura(fatura)
 
 
 def salvar_se_completa(resultado: ResultadoExtracao) -> bool:
     """Salva direto quando a leitura veio completa e sem aviso; senão deixa para revisão."""
     if resultado.fatura.campos_faltando or resultado.aviso:
         return False
-    repositorio.salvar(resultado.fatura)
+    registrar(resultado.fatura)
     return True
 
 

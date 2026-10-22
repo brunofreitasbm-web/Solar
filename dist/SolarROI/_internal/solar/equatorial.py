@@ -15,6 +15,7 @@ PASTA_DOWNLOADS = config.PASTA_PDFS / "equatorial"
 ARQUIVO_SESSAO = PASTA_PERFIL / "sessao.json"
 URL_AGENCIA = "https://agenciavirtual.equatorialenergia.com.br/Login/"
 URL_SSO = "https://auth.equatorialenergia.com.br/"
+LIMITE_DOWNLOADS = 15
 
 
 def _salvar_status_sessao(autenticado: bool) -> None:
@@ -157,6 +158,17 @@ def abrir_sessao_login() -> str:
             _limpar_processos_residuais()
 
 
+def _recusar_se_bloqueado(page) -> None:
+    """O portal fica atrás de um firewall anti-robô (Imperva/Incapsula) que devolve uma página
+    vazia com HTTP 403 ao navegador invisível. Sem este aviso o erro aparece como "login expirado"."""
+    html = page.content()
+    if "_Incapsula_Resource" in html and len(html) < 5000:
+        raise RuntimeError(
+            "O site da Equatorial bloqueou o navegador invisível (firewall anti-robô). "
+            "Rode com a janela visível — o login salvo continua valendo."
+        )
+
+
 def verificar_autenticado() -> bool:
     """Checa de forma rápida se a sessão atual ainda está válida."""
     if not tem_sessao_salva():
@@ -207,6 +219,7 @@ def baixar_faturas_equatorial(
             _avisar("Acessando Agência Virtual Equatorial…")
             page.goto(URL_AGENCIA, timeout=45000)
             page.wait_for_timeout(4000)
+            _recusar_se_bloqueado(page)
 
             # Se não estiver logado, clica no login
             if "auth.equatorialenergia" in page.url or "login" in page.url.lower():
@@ -265,8 +278,9 @@ def baixar_faturas_equatorial(
             locators_fatura = page.locator("button:has-text('Baixar'), a:has-text('Baixar'), button:has-text('PDF'), a:has-text('PDF'), [title*='fatura'], [title*='Fatura'], [aria-label*='Baixar'], [aria-label*='fatura']")
             total_encontrados = locators_fatura.count()
             _avisar(f"Encontrados {total_encontrados} elemento(s) de download.")
+            falhas = 0
 
-            for i in range(min(total_encontrados, 15)):
+            for i in range(min(total_encontrados, LIMITE_DOWNLOADS)):
                 try:
                     el = locators_fatura.nth(i)
                     if not el.is_visible():
@@ -290,7 +304,9 @@ def baixar_faturas_equatorial(
                     except Exception as e_drive:
                         _avisar(f"Aviso Google Drive: {e_drive}")
                 except Exception:
-                    continue
+                    falhas += 1
+            if falhas:
+                _avisar(f"{falhas} botão(ões) não geraram download e foram ignorados.")
         finally:
             try:
                 context.close()
@@ -327,3 +343,15 @@ def processar_faturas_baixadas(arquivos: list[Path]) -> tuple[int, list[Resultad
         else:
             pendentes.append(resultado)
     return salvas, pendentes
+
+
+def baixar_e_importar(callback_progresso: Callable[[str], None] | None = None) -> tuple[int, list[ResultadoExtracao]]:
+    """Rotina completa para o Agendador de Tarefas do Windows: baixa, lê, salva e avisa no Telegram.
+    Abre o navegador visível porque o firewall do portal bloqueia o modo invisível."""
+    arquivos = baixar_faturas_equatorial(callback_progresso, headless=False)
+    return processar_faturas_baixadas(arquivos)
+
+
+if __name__ == "__main__":
+    salvas_, pendentes_ = baixar_e_importar(print)
+    print(f"{salvas_} fatura(s) salva(s); {len(pendentes_)} para revisão no app.")
