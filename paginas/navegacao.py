@@ -31,7 +31,10 @@ PAGINA_INICIAL = "dashboard"
 def _renderizador(modulo: str):
     # Import tardio: só a página aberta carrega suas dependências (plotly, reportlab...).
     def _render() -> None:
-        import_module(f"paginas.{modulo}").render()
+        import importlib
+        mod = import_module(f"paginas.{modulo}")
+        importlib.reload(mod)
+        mod.render()
     _render.__name__ = f"_page_{modulo}"
     return _render
 

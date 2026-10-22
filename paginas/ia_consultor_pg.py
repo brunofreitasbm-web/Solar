@@ -7,14 +7,12 @@ from solar.ia import cliente, ferramentas
 
 
 def render() -> None:
-    ui.cabecalho(
-        "Consultor IA",
-        "Inteligência Artificial para apoio a decisões financeiras, viabilidade de expansão e auditoria regulatória.",
-    )
+    st.header("Consultor IA")
+    st.caption("Inteligência Artificial para apoio a decisões financeiras, viabilidade de expansão e auditoria regulatória.")
 
     painel = painel_dados.carregar()
     if painel is None or painel.df.empty:
-        ui.aviso_sem_dados("Envie suas primeiras faturas para ativar a análise inteligente.")
+        ui.sem_faturas()
         return
 
     provedor, chave = cliente.obter_chave_configurada()
