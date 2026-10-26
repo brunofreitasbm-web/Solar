@@ -44,25 +44,82 @@ def tem_sessao_salva() -> bool:
 
 
 def esta_autenticado_na_pagina(page) -> bool:
-    """Detecta com precisão se o navegador está em uma sessão autenticada da Equatorial."""
+    """Detecta com precisão se a página do navegador está em uma sessão autenticada da Equatorial."""
+    if not page or page.is_closed():
+        return False
     try:
         url = page.url.lower()
-        # Se ainda está no Keycloak SSO, Google OAuth ou no redirect transitório, não está pronto
-        if "auth.equatorialenergia.com.br" in url or "accounts.google.com" in url or "/ca/redirect" in url:
+        # Se ainda está no Keycloak SSO, Google OAuth, Apple ou no redirect transitório, ainda não concluiu
+        if (
+            "auth.equatorialenergia.com.br" in url
+            or "accounts.google.com" in url
+            or "appleid.apple.com" in url
+            or "/ca/redirect" in url
+            or url == "about:blank"
+        ):
             return False
 
-        # Se voltou para a agência virtual
-        if "agenciavirtual.equatorialenergia.com.br" in url:
-            # Checa se o botão de login ('Entrar') ainda está visível na tela
-            btn_login = page.locator(".btn-login, button:has-text('Entrar')")
-            if btn_login.count() > 0:
-                for i in range(min(btn_login.count(), 2)):
-                    if btn_login.nth(i).is_visible():
-                        return False
-            # Se não há botão de login visível, ou se já está em SegundaVia ou Home logada
-            return True
+        # 1. Checagem direta de tokens no localStorage do navegador (Cognito / OutSystems)
+        try:
+            tem_token = page.evaluate("""() => {
+                try {
+                    const keys = Object.keys(localStorage);
+                    const hasCognito = keys.some(k => k.includes('CognitoIdentityServiceProvider') && k.endsWith('.refreshToken'));
+                    const hasSession = Boolean(localStorage.getItem('$OS_Users$CA$ClientVars$UserId')) ||
+                                       Boolean(localStorage.getItem('$OS_Users$$ClientVars$$SESSION_USER_ID')) ||
+                                       Boolean(localStorage.getItem('$OS_Users$Home$ClientVars$CodigoSessao'));
+                    return hasCognito || hasSession;
+                } catch(e) {
+                    return false;
+                }
+            }""")
+            if tem_token:
+                return True
+        except Exception:
+            pass
+
+        # 2. Se está no domínio da agência virtual
+        if "agenciavirtual.equatorialenergia.com.br" in url or "equatorialenergia.com.br" in url:
+            # Se a página tem campos de login ativos (#username ou #kc-login), ainda não logou
+            if page.locator("input#username, input[name='username'], #kc-login").count() > 0:
+                return False
+
+            # Se possui elementos de sessão ativa (Olá, Sair, Segunda Via, Unidade Consumidora, Contratos)
+            indicadores = page.locator("text='Olá', text='Sair', text='Minha Conta', text='Meus Contratos', text='Unidade Consumidora', text='Conta Contrato', text='Segunda via', [title*='Sair']")
+            for i in range(min(indicadores.count(), 4)):
+                if indicadores.nth(i).is_visible():
+                    return True
+
+            # Se já está na rota de SegundaVia ou Home sem formulário de login visível
+            if "segundavia" in url or "home" in url:
+                return True
     except Exception:
         pass
+    return False
+
+
+def obter_pagina_ativa(context):
+    """Retorna a página relevante mais recente do contexto."""
+    if not context or not context.pages:
+        return None
+    for p in reversed(context.pages):
+        if not p.is_closed():
+            u = p.url.lower()
+            if "agenciavirtual.equatorialenergia.com.br" in u or "auth.equatorialenergia.com.br" in u:
+                return p
+    for p in reversed(context.pages):
+        if not p.is_closed():
+            return p
+    return None
+
+
+def esta_autenticado_no_contexto(context) -> bool:
+    """Varre todas as abas abertas no contexto para detectar autenticação."""
+    if not context or not context.pages:
+        return False
+    for p in context.pages:
+        if esta_autenticado_na_pagina(p):
+            return True
     return False
 
 
@@ -151,7 +208,7 @@ def abrir_sessao_login(callback_progresso: Callable[[str], None] | None = None) 
     with sync_playwright() as p:
         context = _obter_contexto(p, headless=False)
         try:
-            page = context.new_page()
+            page = context.pages[0] if context.pages else context.new_page()
             _avisar("Acessando portal da Equatorial...")
             page.goto(URL_SEGUNDA_VIA, timeout=45000)
             page.wait_for_timeout(3000)
@@ -169,19 +226,24 @@ def abrir_sessao_login(callback_progresso: Callable[[str], None] | None = None) 
             inicio = time.time()
             logado = False
             while time.time() - inicio < 180:
-                if page.is_closed():
+                paginas_vivas = [pg for pg in context.pages if not pg.is_closed()]
+                if not paginas_vivas:
                     break
-                if esta_autenticado_na_pagina(page):
-                    logado = True
+                for pg in paginas_vivas:
+                    if esta_autenticado_na_pagina(pg):
+                        logado = True
+                        break
+                if logado:
                     _avisar("Login reconhecido com sucesso! Memorizando sessão...")
-                    page.wait_for_timeout(3000)
+                    time.sleep(2)
                     break
                 time.sleep(1)
 
             _salvar_status_sessao(logado)
             if logado:
                 return True, "Sessão conectada e salva com sucesso!"
-            if page.is_closed():
+            paginas_vivas = [pg for pg in context.pages if not pg.is_closed()]
+            if not paginas_vivas:
                 return False, "Janela finalizada antes da conclusão do login."
             return False, "Tempo limite para login esgotado (180s)."
         finally:
@@ -204,28 +266,7 @@ def _recusar_se_bloqueado(page) -> None:
 
 def verificar_autenticado() -> bool:
     """Checa se a sessão salva ainda é válida no portal da Equatorial."""
-    if not tem_sessao_salva():
-        return False
-    from playwright.sync_api import sync_playwright
-
-    try:
-        with sync_playwright() as p:
-            context = _obter_contexto(p, headless=True)
-            try:
-                page = context.new_page()
-                page.goto(URL_SEGUNDA_VIA, timeout=20000)
-                page.wait_for_timeout(3000)
-                valido = esta_autenticado_na_pagina(page)
-                _salvar_status_sessao(valido)
-                return valido
-            finally:
-                try:
-                    context.close()
-                except Exception:
-                    pass
-                _limpar_processos_residuais()
-    except Exception:
-        return False
+    return tem_sessao_salva()
 
 
 def baixar_faturas_equatorial(
@@ -246,15 +287,15 @@ def baixar_faturas_equatorial(
     with sync_playwright() as p:
         context = _obter_contexto(p, headless=headless)
         try:
-            page = context.new_page()
+            page = context.pages[0] if context.pages else context.new_page()
 
             _avisar("Acessando área de faturas da Equatorial...")
             page.goto(URL_SEGUNDA_VIA, timeout=45000)
             page.wait_for_timeout(4000)
             _recusar_se_bloqueado(page)
 
-            # Verifica se precisa de login
-            if not esta_autenticado_na_pagina(page):
+            # Verifica se precisa de login varrendo as abas
+            if not esta_autenticado_no_contexto(context):
                 if headless:
                     raise RuntimeError(
                         "A sessão da Equatorial expirou ou requer login. "
@@ -265,35 +306,53 @@ def baixar_faturas_equatorial(
                 inicio_login = time.time()
                 logado = False
                 while time.time() - inicio_login < 180:
-                    if page.is_closed():
+                    paginas_vivas = [pg for pg in context.pages if not pg.is_closed()]
+                    if not paginas_vivas:
                         break
-                    if esta_autenticado_na_pagina(page):
-                        logado = True
-                        _salvar_status_sessao(True)
-                        _avisar("Login confirmado! Prosseguindo para o download das contas...")
-                        page.wait_for_timeout(3000)
+                    for pg in paginas_vivas:
+                        if esta_autenticado_na_pagina(pg):
+                            logado = True
+                            page = pg
+                            _salvar_status_sessao(True)
+                            _avisar("Login confirmado! Prosseguindo para o download das contas...")
+                            time.sleep(2)
+                            break
+                    if logado:
                         break
                     time.sleep(1)
 
                 if not logado:
-                    if page.is_closed():
+                    paginas_vivas = [pg for pg in context.pages if not pg.is_closed()]
+                    if not paginas_vivas:
                         raise RuntimeError("A janela do navegador foi fechada antes da confirmação do login na Equatorial.")
                     raise RuntimeError("Tempo limite para login na Equatorial esgotado (180s).")
 
-            # Garante que está na tela de Segunda Via
+            # Garante que está na tela de Segunda Via na página ativa
+            page = obter_pagina_ativa(context) or page
             if "segundavia" not in page.url.lower():
                 _avisar("Carregando tela de 2ª via e faturas...")
                 page.goto(URL_SEGUNDA_VIA, timeout=45000)
-                page.wait_for_timeout(5000)
+                page.wait_for_timeout(4000)
+
+            # Se houver lista de unidades consumidoras / contratos, avisa ou seleciona
+            cards_contrato = page.locator(".card-contrato, [data-testid*='contrato'], button:has-text('Acessar'), button:has-text('Selecionar')")
+            if cards_contrato.count() > 0 and cards_contrato.first.is_visible():
+                _avisar("Acessando unidade consumidora...")
+                try:
+                    cards_contrato.first.click(timeout=3000)
+                    page.wait_for_timeout(3000)
+                except Exception:
+                    pass
 
             _avisar("Procurando faturas disponíveis para download...")
-            # Procura botões ou links de PDF / Baixar / 2ª via
             locators_fatura = page.locator(
                 "button:has-text('Baixar'), a:has-text('Baixar'), "
                 "button:has-text('PDF'), a:has-text('PDF'), "
                 "button:has-text('2ª Via'), a:has-text('2ª Via'), "
+                "button:has-text('Visualizar'), a:has-text('Visualizar'), "
                 "[title*='fatura'], [title*='Fatura'], "
-                "[aria-label*='Baixar'], [aria-label*='fatura']"
+                "[aria-label*='Baixar'], [aria-label*='fatura'], [aria-label*='PDF'], "
+                ".btn-download, .download-fatura"
             )
             total_encontrados = locators_fatura.count()
             _avisar(f"Localizados {total_encontrados} elemento(s) de download na página.")
@@ -305,28 +364,57 @@ def baixar_faturas_equatorial(
                     if not el.is_visible():
                         continue
 
-                    with page.expect_download(timeout=12000) as download_info:
-                        el.click()
-                    download = download_info.value
-                    nome_arquivo = download.suggested_filename or f"fatura_equatorial_{int(time.time())}_{i}.pdf"
-                    caminho_final = PASTA_DOWNLOADS / nome_arquivo
-                    download.save_as(str(caminho_final))
-                    arquivos_baixados.append(caminho_final)
-                    _avisar(f"Baixado: {nome_arquivo}")
-
-                    # Copia para o Google Drive local se configurado
+                    download_concluido = False
+                    # 1. Tentativa de download direto
                     try:
-                        config.PASTA_GOOGLE_DRIVE.mkdir(parents=True, exist_ok=True)
-                        caminho_drive = config.PASTA_GOOGLE_DRIVE / nome_arquivo
-                        shutil.copy2(caminho_final, caminho_drive)
-                        _avisar(f"Sincronizado com Google Drive: {nome_arquivo}")
-                    except Exception as e_drive:
-                        _avisar(f"Aviso Google Drive: {e_drive}")
+                        with page.expect_download(timeout=6000) as download_info:
+                            el.click(timeout=3000)
+                        download = download_info.value
+                        nome_arquivo = download.suggested_filename or f"fatura_equatorial_{int(time.time())}_{i}.pdf"
+                        caminho_final = PASTA_DOWNLOADS / nome_arquivo
+                        download.save_as(str(caminho_final))
+                        arquivos_baixados.append(caminho_final)
+                        _avisar(f"Baixado: {nome_arquivo}")
+                        download_concluido = True
+                    except Exception:
+                        pass
+
+                    # 2. Se abriu modal com botão de Baixar PDF
+                    if not download_concluido:
+                        btn_modal = page.locator("button:has-text('Baixar PDF'), a:has-text('Baixar PDF'), button:has-text('Download'), a:has-text('Download')").first
+                        if btn_modal.is_visible(timeout=2000):
+                            try:
+                                with page.expect_download(timeout=8000) as download_info:
+                                    btn_modal.click(timeout=3000)
+                                download = download_info.value
+                                nome_arquivo = download.suggested_filename or f"fatura_equatorial_{int(time.time())}_{i}.pdf"
+                                caminho_final = PASTA_DOWNLOADS / nome_arquivo
+                                download.save_as(str(caminho_final))
+                                arquivos_baixados.append(caminho_final)
+                                _avisar(f"Baixado: {nome_arquivo}")
+                                download_concluido = True
+                            except Exception:
+                                pass
+                            try:
+                                page.locator("button:has-text('Fechar'), .close, [aria-label='Close']").first.click(timeout=1000)
+                            except Exception:
+                                pass
+
+                    if not download_concluido:
+                        falhas += 1
+                    else:
+                        # Copia para o Google Drive local se configurado
+                        try:
+                            config.PASTA_GOOGLE_DRIVE.mkdir(parents=True, exist_ok=True)
+                            caminho_drive = config.PASTA_GOOGLE_DRIVE / nome_arquivo
+                            shutil.copy2(caminho_final, caminho_drive)
+                            _avisar(f"Sincronizado com Google Drive: {nome_arquivo}")
+                        except Exception as e_drive:
+                            _avisar(f"Aviso Google Drive: {e_drive}")
                 except Exception:
                     falhas += 1
 
             if not arquivos_baixados and total_encontrados == 0:
-                # Tenta localizar links no menu alternativo
                 _avisar("Verificando histórico de faturas...")
                 page.wait_for_timeout(2000)
 

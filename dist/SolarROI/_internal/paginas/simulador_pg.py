@@ -152,7 +152,10 @@ def render() -> None:
     if p is None:
         ui.sem_faturas()
         return
-    aba_quitacao, aba_expansao = st.tabs([":material/savings: Quitação antecipada", ":material/add_circle: Ampliar a usina"])
+    aba_quitacao, aba_expansao = st.tabs(
+        [":material/savings: Quitação antecipada", ":material/add_circle: Ampliar a usina"],
+        key="simulador_aba_ativa",  # sem key, cada slider/number_input volta pra 1ª aba a cada rerun
+    )
     with aba_quitacao:
         _quitacao(p)
     with aba_expansao:

@@ -3,7 +3,7 @@ from pathlib import Path
 import streamlit as st
 
 from paginas import ui
-from solar import equatorial
+from solar import config, equatorial
 from solar.faturas import pendentes as fila
 from solar.faturas.extracao import extrair
 from solar.faturas.importacao import salvar_se_completa
@@ -14,9 +14,9 @@ def _processar(nome_bytes: list[tuple[str, bytes]], salvar_direto: bool) -> None
 
     novos = [(nome, b) for nome, b in nome_bytes if nome not in processados]
     if not novos:
-        st.info(f"{len(nome_bytes)} arquivo(s) já lido(s) nesta sessão.", icon=":material/done_all:")
+        st.info("Todos os arquivos selecionados já foram lidos nesta sessão.", icon=":material/done_all:")
         if fila.contar():
-            ui.link_para("revisar-leitura", "Ver a fila de revisão")
+            ui.link_para("revisar-leitura", "Ver faturas pendentes de revisão")
         return
 
     salvas = 0
@@ -34,114 +34,217 @@ def _processar(nome_bytes: list[tuple[str, bytes]], salvar_direto: bool) -> None
 
     na_fila = len(novos) - salvas
     if salvas:
-        st.success(f"{salvas} fatura(s) lida(s) por completo e já salva(s).", icon=":material/check_circle:")
+        st.success(f"{salvas} fatura(s) lida(s) com sucesso e salvas no histórico.", icon=":material/check_circle:")
         ui.link_para("dashboard", "Ver no Dashboard")
     if na_fila:
-        st.warning(f"{na_fila} fatura(s) precisam da sua revisão antes de entrar no histórico.", icon=":material/fact_check:")
+        st.warning(f"{na_fila} fatura(s) precisam da sua revisão de leitura.", icon=":material/fact_check:")
         ui.link_para("revisar-leitura", f"Revisar {na_fila} fatura(s) agora")
 
 
-def _status_conexao() -> None:
-    col_status, col_acao = st.columns([2, 1], vertical_alignment="center")
-    with col_status:
-        if equatorial.tem_sessao_salva():
-            st.success("Sessão da Equatorial conectada neste computador.", icon=":material/verified_user:")
+def _aba_google_drive() -> None:
+    pasta_drive = config.PASTA_GOOGLE_DRIVE
+    pasta_existe = pasta_drive.exists()
+
+    with st.container(border=True):
+        st.markdown("#### :material/cloud_sync: Sincronização automática com o Google Drive")
+        st.caption(f"Pasta monitorada: `{pasta_drive}`")
+
+        if not pasta_existe:
+            st.error(
+                "A pasta do Google Drive não foi localizada neste computador. "
+                "Confirme se o aplicativo do Google Drive está instalado ou altere o caminho em Configurações.",
+                icon=":material/folder_off:",
+            )
+            return
+
+        todos_drive, novos_drive = equatorial.obter_arquivos_drive()
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        col_m1.metric("Total no Google Drive", len(todos_drive), border=True)
+        col_m2.metric("Já cadastradas", len(todos_drive) - len(novos_drive), border=True)
+        col_m3.metric("Novas para importar", len(novos_drive), border=True)
+
+        col_opc1, col_opc2 = st.columns(2)
+        salvar_direto = col_opc1.checkbox(
+            "Salvar direto faturas lidas por completo",
+            value=True,
+            key="drive_salvar_direto",
+            help="Se todos os dados forem lidos com segurança, já entram no histórico sem revisão manual.",
+        )
+        reimportar_todas = col_opc2.checkbox(
+            "Reimportar todos os arquivos da pasta",
+            value=False,
+            key="drive_reimportar_todas",
+            help="Marque se quiser reler mesmo as contas que já constam no banco.",
+        )
+
+        alvos = todos_drive if reimportar_todas else novos_drive
+
+        if alvos:
+            rotulo = f"Importar {len(alvos)} fatura(s) do Google Drive"
+            if st.button(rotulo, type="primary", icon=":material/sync:", width="stretch"):
+                _processar([(str(p.name), p.read_bytes()) for p in alvos], salvar_direto=salvar_direto)
         else:
-            st.warning("**Passo 1 obrigatório:** conecte sua conta uma primeira vez para salvar o acesso.",
-                       icon=":material/login:")
-    with col_acao:
-        rotulo_btn = "Reconectar conta" if equatorial.tem_sessao_salva() else "Conectar na Equatorial"
-        if st.button(rotulo_btn, icon=":material/login:", width="stretch",
-                     help="Abre uma janela do navegador para você digitar CPF/senha da Equatorial e salvar a sessão."):
-            with st.spinner("Abrindo janela do navegador… Conclua seu login na janela da Equatorial."):
-                ui.avisar(equatorial.abrir_sessao_login(), ":material/info:")
-            st.rerun()
-
-
-def _baixar(salvar_auto: bool, modo_visivel: bool) -> None:
-    if not equatorial.tem_sessao_salva() and not modo_visivel:
-        st.warning(
-            "Você ainda não conectou sua conta da Equatorial. "
-            "Clique em **Conectar na Equatorial** acima ou marque **Abrir janela visível do navegador** para entrar com suas credenciais.",
-            icon=":material/warning:",
-        )
-        return
-    status_box = st.empty()
-    barra = st.progress(0.1, text="Conectando à Equatorial…")
-    try:
-        barra.progress(0.3, text="Acessando o portal da Equatorial…")
-        arquivos = equatorial.baixar_faturas_equatorial(
-            callback_progresso=lambda texto: status_box.caption(texto), headless=not modo_visivel,
-        )
-    except Exception as erro:
-        barra.empty()
-        status_box.empty()
-        st.error(f"Não consegui baixar da Equatorial: {erro}. Tente de novo com **Abrir janela visível** marcado "
-                 "ou clique em **Conectar na Equatorial** para refazer o login.", icon=":material/error:")
-        return
-    barra.empty()
-    status_box.empty()
-    if not arquivos:
-        st.warning("Nenhuma fatura nova encontrada. Confira se o login ainda vale ou tente com a janela visível.",
-                   icon=":material/search_off:")
-        return
-    _processar([(arq.name, arq.read_bytes()) for arq in arquivos], salvar_direto=salvar_auto)
+            st.success("Tudo em dia! Todas as faturas desta pasta já estão registradas no histórico.", icon=":material/task_alt:")
 
 
 def _aba_equatorial() -> None:
-    st.caption("Baixe as faturas direto da sua conta, sem esperar o e-mail chegar.")
-    _status_conexao()
+    st.markdown("#### :material/bolt: Conexão e download na Agência Virtual da Equatorial")
+    st.caption("Acesso direto ao portal de faturas da Equatorial Pará.")
 
-    st.markdown("**Passo 2:** baixe e importe as faturas")
-    col_opc1, col_opc2 = st.columns(2)
-    salvar_auto = col_opc1.checkbox(
-        "Salvar direto as faturas lidas por completo", value=True,
-        help="Se todos os valores forem lidos, a fatura já entra no histórico sem revisão manual.")
-    modo_visivel = col_opc2.checkbox(
-        "Abrir janela visível do navegador", value=True,
-        help="Necessário quando a Equatorial pede confirmação de acesso ou bloqueia o navegador invisível.")
-    st.caption(f":material/cloud_sync: As faturas baixadas são copiadas para `{equatorial.config.PASTA_GOOGLE_DRIVE}`.")
+    tem_sessao = equatorial.tem_sessao_salva()
 
-    if st.button("Baixar faturas recentes", type="primary", icon=":material/download:"):
-        _baixar(salvar_auto, modo_visivel)
+    with st.container(border=True):
+        col_info, col_btn_auth = st.columns([2, 1], vertical_alignment="center")
+        with col_info:
+            if tem_sessao:
+                st.success("Sessão da Equatorial memorizada neste computador.", icon=":material/verified_user:")
+            else:
+                st.info("Nenhuma sessão salva ainda. O sistema abrirá a janela para seu primeiro acesso.", icon=":material/info:")
+        with col_btn_auth:
+            rotulo_auth = "Reconectar / Testar" if tem_sessao else "Conectar conta"
+            if st.button(rotulo_auth, icon=":material/login:", width="stretch",
+                         help="Abre o navegador para você entrar com Google ou CPF/senha e salvar o acesso."):
+                caixa = st.empty()
+                with st.spinner("Abrindo janela do navegador… Conclua a identificação na tela aberta."):
+                    ok, msg = equatorial.abrir_sessao_login(callback_progresso=lambda t: caixa.caption(t))
+                caixa.empty()
+                if ok:
+                    st.success(msg, icon=":material/check_circle:")
+                else:
+                    st.warning(msg, icon=":material/warning:")
+                st.rerun()
 
-    with st.expander("Outras formas de receber as faturas", icon=":material/lightbulb:"):
-        st.markdown(
-            "- **WhatsApp da Equatorial (Clara):** adicione `(91) 3217-8200` e envie `2ª via` para receber o PDF na hora.\n"
-            "- **Fatura digital:** na Agência Virtual, clique em **Solicitar fatura por e-mail** para voltar a receber todo mês."
-        )
+    st.markdown("**Opções de download automático**")
+    col_c1, col_c2 = st.columns(2)
+    salvar_auto = col_c1.checkbox(
+        "Salvar direto faturas lidas por completo",
+        value=True,
+        key="eqtl_salvar_auto",
+        help="As faturas com leitura completa entram automaticamente no banco de dados.",
+    )
+    modo_visivel = col_c2.checkbox(
+        "Abrir janela visível do navegador (Recomendado)",
+        value=True,
+        key="eqtl_modo_visivel",
+        help="Evita bloqueios do firewall anti-robô da Equatorial. Você poderá acompanhar o download em tempo real.",
+    )
+
+    st.caption(f":material/sync_alt: As faturas baixadas são salvas e copiadas para `{config.PASTA_GOOGLE_DRIVE}`.")
+
+    if st.button("Baixar faturas da Equatorial agora", type="primary", icon=":material/download:", width="stretch"):
+        status_box = st.empty()
+        barra = st.progress(0.1, text="Conectando à Equatorial…")
+        try:
+            barra.progress(0.3, text="Acessando área de 2ª via e faturas…")
+            arquivos = equatorial.baixar_faturas_equatorial(
+                callback_progresso=lambda texto: status_box.caption(texto),
+                headless=not modo_visivel,
+            )
+        except Exception as erro:
+            barra.empty()
+            status_box.empty()
+            st.error(
+                f"Não foi possível baixar da Equatorial: {erro}",
+                icon=":material/error:",
+            )
+            return
+
+        barra.empty()
+        status_box.empty()
+        if not arquivos:
+            st.warning(
+                "Nenhum arquivo novo foi baixado no portal. "
+                "Confirme se as faturas do mês já foram emitidas pela Equatorial.",
+                icon=":material/search_off:",
+            )
+            return
+
+        _processar([(arq.name, arq.read_bytes()) for arq in arquivos], salvar_direto=salvar_auto)
+
+
+def _aba_brechas_alternativas() -> None:
+    st.markdown("#### :material/lightbulb: Formas mais rápidas e sem bloqueios para obter faturas")
+    st.caption("Canais oficiais da Equatorial que evitam filas, captchas e instabilidades no site.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        with st.container(border=True):
+            st.markdown("##### :material/chat: WhatsApp Oficial da Equatorial (Clara) · :orange-badge[⚡ Mais rápido]")
+            st.markdown(
+                "A assistente virtual **Clara** envia o PDF oficial da fatura diretamente pelo WhatsApp "
+                "em menos de 1 minuto, sem qualquer firewall ou captcha."
+            )
+            st.markdown("**Número:** `(91) 3217-8200`")
+            st.link_button(
+                "Abrir WhatsApp da Clara (Pedir 2ª via)",
+                url="https://wa.me/559132178200?text=2a%20via",
+                icon=":material/send:",
+                type="primary",
+                width="stretch",
+            )
+            st.caption("Assim que receber o PDF no WhatsApp, solte-o na pasta do Google Drive ou na aba de arquivos.")
+
+    with col2:
+        with st.container(border=True):
+            st.markdown("##### :material/mail: Fatura Digital por E-mail")
+            st.markdown(
+                f"Cadastre o recebimento da fatura por e-mail (`{config.EMAIL_ISABELA}`). "
+                "Todo mês a conta chega em PDF no seu e-mail logo após o fechamento do ciclo de leitura."
+            )
+            st.markdown(
+                "- Sem atraso de entrega física;\n"
+                "- Arquivos já organizados por mês;\n"
+                "- Pode ser sincronizado diretamente na pasta do Google Drive."
+            )
+            st.link_button(
+                "Agência Virtual: Cadastrar Fatura por E-mail",
+                url="https://agenciavirtual.equatorialenergia.com.br/",
+                icon=":material/open_in_new:",
+                width="stretch",
+            )
 
 
 def _aba_arquivos() -> None:
+    st.markdown("#### :material/upload_file: Enviar arquivos PDF avulsos")
     arquivos = st.file_uploader(
-        "Faturas em PDF", type="pdf", accept_multiple_files=True,
-        help="Pode soltar várias de uma vez, de endereços e meses diferentes.",
+        "Selecione ou arraste as faturas em PDF",
+        type="pdf",
+        accept_multiple_files=True,
+        help="Você pode enviar múltiplas contas de energia de uma única vez.",
     )
     if arquivos:
         _processar([(a.name, a.read()) for a in arquivos], salvar_direto=False)
     else:
-        st.caption("Assim que você soltar os PDFs aqui, eles são lidos e vão para a fila de revisão.")
+        st.caption("Solte seus arquivos PDF acima para iniciar o processamento.")
 
 
 def _aba_pasta() -> None:
+    st.markdown("#### :material/folder_open: Importar de outra pasta no computador")
     caminho = st.text_input(
-        "Caminho da pasta",
-        help="Lê todos os PDFs dessa pasta e das subpastas — útil quando você organiza as "
-             "faturas por endereço, uma subpasta por unidade.",
-        placeholder=r"C:\Users\bruno\Downloads\Solar Contas Energia",
+        "Caminho completo da pasta",
+        value=st.session_state.get("pasta_avulsa_ultimo_caminho", ""),
+        placeholder=r"C:\Users\bruno\Downloads\Contas Energia",
+        help="Lê todos os PDFs dessa pasta e das subpastas.",
     )
+    st.session_state["pasta_avulsa_ultimo_caminho"] = caminho
     pasta = Path(caminho.strip().strip('"')) if caminho.strip() else None
     if pasta and not pasta.is_dir():
-        st.error("Pasta não encontrada. Copie o caminho pela barra de endereço do Explorador de Arquivos e cole aqui.",
-                 icon=":material/folder_off:")
+        st.error("Pasta não encontrada. Verifique o caminho digitado.", icon=":material/folder_off:")
+
     salvar_direto = st.checkbox(
-        "Salvar direto as faturas lidas por completo", value=True, key="pasta_salvar_direto",
-        help="Só vão para a fila de revisão as que tiverem algum campo faltando. Desmarque para revisar todas.",
+        "Salvar direto faturas lidas por completo",
+        value=True,
+        key="pasta_avulsa_salvar_direto",
+        help="Faturas com dados completos entram no histórico sem necessidade de revisão.",
     )
-    if st.button("Ler faturas da pasta", type="primary", icon=":material/folder_open:", disabled=not (pasta and pasta.is_dir())):
+
+    if st.button("Ler PDFs desta pasta", type="primary", icon=":material/folder:",
+                 disabled=not (pasta and pasta.is_dir()), width="stretch"):
         pdfs = sorted(pasta.rglob("*.pdf"))
         if not pdfs:
-            st.warning("Nenhum PDF encontrado nessa pasta (nem nas subpastas).", icon=":material/search_off:")
+            st.warning("Nenhum PDF encontrado na pasta selecionada.", icon=":material/search_off:")
             return
         st.caption(f"{len(pdfs)} PDF(s) encontrado(s).")
         _processar([(str(p.relative_to(pasta)), p.read_bytes()) for p in pdfs], salvar_direto)
@@ -149,13 +252,30 @@ def _aba_pasta() -> None:
 
 def render() -> None:
     st.title("Enviar faturas")
-    st.caption("O app lê cada conta de energia sozinho. Se faltar algum dado, você revisa na próxima tela.")
+    st.caption("Importe suas contas de energia da Equatorial pelo Google Drive, pelo portal web ou por arquivos.")
 
-    aba_equatorial, aba_upload, aba_pasta = st.tabs([
-        ":material/bolt: Baixar da Equatorial", ":material/upload: Arrastar arquivos", ":material/folder: Ler de uma pasta",
-    ])
-    with aba_equatorial:
+    pendentes = fila.contar()
+    if pendentes:
+        st.info(
+            f"Você tem {pendentes} fatura(s) aguardando revisão de leitura, de uma importação anterior.",
+            icon=":material/fact_check:",
+        )
+        ui.link_para("revisar-leitura", f"Revisar {pendentes} fatura(s) agora")
+
+    aba_drive, aba_eqtl, aba_brechas, aba_upload, aba_pasta = st.tabs([
+        ":material/cloud_sync: Google Drive",
+        ":material/bolt: Agência Virtual",
+        ":material/lightbulb: WhatsApp & E-mail",
+        ":material/upload_file: Arrastar arquivos",
+        ":material/folder: Outra pasta",
+    ], key="upload_aba_ativa")  # sem key, a aba volta pra 1ª a cada rerun e esconde o resultado do processamento
+
+    with aba_drive:
+        _aba_google_drive()
+    with aba_eqtl:
         _aba_equatorial()
+    with aba_brechas:
+        _aba_brechas_alternativas()
     with aba_upload:
         _aba_arquivos()
     with aba_pasta:
