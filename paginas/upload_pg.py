@@ -171,7 +171,7 @@ def _aba_brechas_alternativas() -> None:
 
     with col1:
         with st.container(border=True):
-            st.markdown("##### :material/chat: WhatsApp Oficial da Equatorial (Clara)")
+            st.markdown("##### :material/chat: WhatsApp Oficial da Equatorial (Clara) · :orange-badge[⚡ Mais rápido]")
             st.markdown(
                 "A assistente virtual **Clara** envia o PDF oficial da fatura diretamente pelo WhatsApp "
                 "em menos de 1 minuto, sem qualquer firewall ou captcha."
@@ -224,9 +224,11 @@ def _aba_pasta() -> None:
     st.markdown("#### :material/folder_open: Importar de outra pasta no computador")
     caminho = st.text_input(
         "Caminho completo da pasta",
+        value=st.session_state.get("pasta_avulsa_ultimo_caminho", ""),
         placeholder=r"C:\Users\bruno\Downloads\Contas Energia",
         help="Lê todos os PDFs dessa pasta e das subpastas.",
     )
+    st.session_state["pasta_avulsa_ultimo_caminho"] = caminho
     pasta = Path(caminho.strip().strip('"')) if caminho.strip() else None
     if pasta and not pasta.is_dir():
         st.error("Pasta não encontrada. Verifique o caminho digitado.", icon=":material/folder_off:")
@@ -252,13 +254,21 @@ def render() -> None:
     st.title("Enviar faturas")
     st.caption("Importe suas contas de energia da Equatorial pelo Google Drive, pelo portal web ou por arquivos.")
 
+    pendentes = fila.contar()
+    if pendentes:
+        st.info(
+            f"Você tem {pendentes} fatura(s) aguardando revisão de leitura, de uma importação anterior.",
+            icon=":material/fact_check:",
+        )
+        ui.link_para("revisar-leitura", f"Revisar {pendentes} fatura(s) agora")
+
     aba_drive, aba_eqtl, aba_brechas, aba_upload, aba_pasta = st.tabs([
         ":material/cloud_sync: Google Drive",
         ":material/bolt: Agência Virtual",
         ":material/lightbulb: WhatsApp & E-mail",
         ":material/upload_file: Arrastar arquivos",
         ":material/folder: Outra pasta",
-    ])
+    ], key="upload_aba_ativa")  # sem key, a aba volta pra 1ª a cada rerun e esconde o resultado do processamento
 
     with aba_drive:
         _aba_google_drive()
