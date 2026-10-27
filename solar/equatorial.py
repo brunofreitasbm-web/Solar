@@ -152,6 +152,13 @@ def _limpar_processos_residuais():
                 pass
 
 
+USER_AGENT_PADRAO = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/131.0.0.0 Safari/537.36"
+)
+
+
 def _obter_contexto(p, headless: bool = False):
     """Cria ou recupera o contexto de navegador com perfil persistente para manter a sessão."""
     PASTA_PERFIL.mkdir(parents=True, exist_ok=True)
@@ -166,33 +173,47 @@ def _obter_contexto(p, headless: bool = False):
         "--disable-session-crashed-bubble",
     ]
 
+    contexto = None
     for tentativa in range(2):
         try:
-            return p.chromium.launch_persistent_context(
+            contexto = p.chromium.launch_persistent_context(
                 user_data_dir=str(PASTA_PERFIL),
                 channel="chrome",
                 headless=headless,
                 accept_downloads=True,
+                user_agent=USER_AGENT_PADRAO,
                 args=argumentos,
                 no_viewport=True,
             )
+            break
         except Exception as e:
             _limpar_processos_residuais()
             time.sleep(1)
             if tentativa == 1:
                 try:
-                    return p.chromium.launch_persistent_context(
+                    contexto = p.chromium.launch_persistent_context(
                         user_data_dir=str(PASTA_PERFIL),
                         headless=headless,
                         accept_downloads=True,
+                        user_agent=USER_AGENT_PADRAO,
                         args=argumentos,
                         no_viewport=True,
                     )
+                    break
                 except Exception:
                     raise RuntimeError(
                         "O Chrome foi encerrado inesperadamente ou já existe uma janela da Equatorial em execução. "
                         "Feche as janelas abertas do Chrome e tente novamente."
                     ) from e
+
+    if contexto:
+        try:
+            contexto.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        except Exception:
+            pass
+    return contexto
+
+
 
 
 def abrir_sessao_login(callback_progresso: Callable[[str], None] | None = None) -> tuple[bool, str]:
@@ -254,14 +275,54 @@ def abrir_sessao_login(callback_progresso: Callable[[str], None] | None = None) 
             _limpar_processos_residuais()
 
 
-def _recusar_se_bloqueado(page) -> None:
-    """Detecta bloqueio por firewall anti-robô (Imperva/Incapsula)."""
-    html = page.content()
+def _tratar_bloqueio_antirobo(page, headless: bool = False, callback_progresso: Callable[[str], None] | None = None) -> None:
+    """Detecta e aguarda resolução do bloqueio anti-robô (Imperva/Incapsula)."""
+    try:
+        html = page.content()
+    except Exception:
+        return
+
     if "_Incapsula_Resource" in html and len(html) < 5000:
-        raise RuntimeError(
-            "O site da Equatorial bloqueou o navegador invisível (firewall anti-robô). "
-            "Execute com a janela visível para que o login e downloads prossigam."
-        )
+        # Se bloqueou em rota interna, recarrega a raiz oficial para obter cookies de permissão
+        try:
+            if "segundavia" in page.url.lower():
+                page.goto(URL_AGENCIA, timeout=30000)
+                page.wait_for_timeout(3000)
+                if "_Incapsula_Resource" not in page.content():
+                    return
+        except Exception:
+            pass
+
+        if headless:
+            raise RuntimeError(
+                "O site da Equatorial bloqueou o navegador invisível (firewall anti-robô). "
+                "Execute com a opção 'Abrir janela visível do navegador' marcada para resolver."
+            )
+
+        if callback_progresso:
+            callback_progresso("Verificação de segurança da Equatorial em andamento. Aguardando...")
+
+        inicio = time.time()
+        while time.time() - inicio < 45:
+            if page.is_closed():
+                raise RuntimeError("A janela do navegador foi fechada durante a verificação de segurança.")
+            page.wait_for_timeout(2000)
+            try:
+                html_atual = page.content()
+                if "_Incapsula_Resource" not in html_atual or len(html_atual) >= 5000:
+                    return
+            except Exception:
+                pass
+
+        # Tentativa final pela URL de entrada da agência
+        try:
+            page.goto(URL_AGENCIA, timeout=30000)
+            page.wait_for_timeout(3000)
+            if "_Incapsula_Resource" not in page.content():
+                return
+        except Exception:
+            pass
+        raise RuntimeError("Tempo limite esgotado para verificação de segurança anti-robô da Equatorial (45s).")
 
 
 def verificar_autenticado() -> bool:
@@ -289,10 +350,10 @@ def baixar_faturas_equatorial(
         try:
             page = context.pages[0] if context.pages else context.new_page()
 
-            _avisar("Acessando área de faturas da Equatorial...")
-            page.goto(URL_SEGUNDA_VIA, timeout=45000)
-            page.wait_for_timeout(4000)
-            _recusar_se_bloqueado(page)
+            _avisar("Acessando portal da Equatorial...")
+            page.goto(URL_AGENCIA, timeout=45000)
+            page.wait_for_timeout(3000)
+            _tratar_bloqueio_antirobo(page, headless=headless, callback_progresso=_avisar)
 
             # Verifica se precisa de login varrendo as abas
             if not esta_autenticado_no_contexto(context):
@@ -327,12 +388,20 @@ def baixar_faturas_equatorial(
                         raise RuntimeError("A janela do navegador foi fechada antes da confirmação do login na Equatorial.")
                     raise RuntimeError("Tempo limite para login na Equatorial esgotado (180s).")
 
+            # Agora que está autenticado e com cookies de permissão, acessa Segunda Via
+            page = obter_pagina_ativa(context) or page
+            _avisar("Acessando tela de 2ª via e faturas...")
+            page.goto(URL_SEGUNDA_VIA, timeout=45000)
+            page.wait_for_timeout(3000)
+            _tratar_bloqueio_antirobo(page, headless=headless, callback_progresso=_avisar)
+
             # Garante que está na tela de Segunda Via na página ativa
             page = obter_pagina_ativa(context) or page
             if "segundavia" not in page.url.lower():
                 _avisar("Carregando tela de 2ª via e faturas...")
                 page.goto(URL_SEGUNDA_VIA, timeout=45000)
                 page.wait_for_timeout(4000)
+
 
             # Se houver lista de unidades consumidoras / contratos, avisa ou seleciona
             cards_contrato = page.locator(".card-contrato, [data-testid*='contrato'], button:has-text('Acessar'), button:has-text('Selecionar')")
