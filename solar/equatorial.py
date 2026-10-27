@@ -157,9 +157,23 @@ USER_AGENT_PADRAO = (
     "AppleWebKit/537.36 (KHTML, like Gecko) "
     "Chrome/131.0.0.0 Safari/537.36"
 )
+def _purgar_cookies_incapsula(context) -> None:
+    """Remove cookies manchados do firewall Incapsula mantendo a sessão do usuário intacta."""
+    try:
+        cookies = context.cookies()
+        validos = [
+            c for c in cookies
+            if not any(c["name"].lower().startswith(pfx) for pfx in ["incap", "visid_incap", "nlbi", "_incap"])
+        ]
+        context.clear_cookies()
+        if validos:
+            context.add_cookies(validos)
+    except Exception:
+        pass
 
 
 def _obter_contexto(p, headless: bool = False):
+
     """Cria ou recupera o contexto de navegador com perfil persistente para manter a sessão."""
     PASTA_PERFIL.mkdir(parents=True, exist_ok=True)
     PASTA_DOWNLOADS.mkdir(parents=True, exist_ok=True)
@@ -206,12 +220,16 @@ def _obter_contexto(p, headless: bool = False):
                         "Feche as janelas abertas do Chrome e tente novamente."
                     ) from e
 
+
     if contexto:
         try:
             contexto.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
         except Exception:
             pass
+        _purgar_cookies_incapsula(contexto)
     return contexto
+
+
 
 
 
