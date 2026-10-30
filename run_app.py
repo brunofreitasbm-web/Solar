@@ -60,7 +60,7 @@ def main():
         app_dir = Path(sys.executable).parent
     else:
         bundle_dir = Path(__file__).resolve().parent
-        app_dir = bundle_dir
+        app_dir = Path(os.environ.get("SOLAR_RAIZ_DADOS", bundle_dir))
 
     # Garante estrutura de persistência local
     inicializar_estrutura_pastas(app_dir, bundle_dir)

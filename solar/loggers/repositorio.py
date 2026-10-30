@@ -12,6 +12,19 @@ def cadastrar_logger(sn: str, nome: str, ip: str, porta: int = 8484) -> None:
         )
 
 
+def importar_loggers(caminho_origem: str) -> int:
+    """Copia os loggers cadastrados em outro banco (ex.: o de uma instalação anterior). Devolve quantos copiou."""
+    with conexao() as con:
+        con.execute("ATTACH DATABASE ? AS origem", (caminho_origem,))
+        try:
+            con.execute("INSERT OR IGNORE INTO loggers SELECT sn, nome, ip, porta FROM origem.loggers")
+            copiados = con.execute("SELECT changes()").fetchone()[0]
+        finally:
+            con.commit()
+            con.execute("DETACH DATABASE origem")
+    return copiados
+
+
 def listar_loggers() -> list[dict]:
     with conexao() as con:
         return [dict(l) for l in con.execute("SELECT sn, nome, ip, porta FROM loggers ORDER BY nome")]

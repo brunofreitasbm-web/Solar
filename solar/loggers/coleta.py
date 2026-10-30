@@ -2,6 +2,7 @@
 
 Uso:
   python -m solar.loggers.coleta adicionar "Usina 1" 192.168.0.50 AP00100522440448
+  python -m solar.loggers.coleta importar C:\\caminho\\solar.db
   python -m solar.loggers.coleta uma-vez
   python -m solar.loggers.coleta rodar
 """
@@ -48,6 +49,8 @@ def main() -> None:
     add.add_argument("ip")
     add.add_argument("sn")
     add.add_argument("--porta", type=int, default=8484)
+    imp = sub.add_parser("importar")
+    imp.add_argument("banco")
     sub.add_parser("uma-vez")
     sub.add_parser("rodar")
     args = parser.parse_args()
@@ -55,6 +58,8 @@ def main() -> None:
     if args.comando == "adicionar":
         repositorio.cadastrar_logger(args.sn, args.nome, args.ip, args.porta)
         print(f"Logger '{args.nome}' cadastrado.")
+    elif args.comando == "importar":
+        print(f"{repositorio.importar_loggers(args.banco)} logger(s) importado(s).")
     elif args.comando == "uma-vez":
         _coletar_e_imprimir()
     else:

@@ -73,3 +73,13 @@ def test_alerta_de_string_aparece_na_central_de_alertas():
     repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "tim": agora, "vpv": [3000, 40], "ipv": [190, 0]}))
     lista = alertas.de_loggers()
     assert len(lista) == 1 and "string 2" in lista[0].texto and lista[0].gravidade == "erro"
+
+
+def test_importar_loggers_de_outro_banco_nao_duplica(tmp_path, monkeypatch):
+    origem = tmp_path / "origem.db"
+    monkeypatch.setattr(db, "CAMINHO_DB", origem)
+    repositorio.cadastrar_logger("AP1", "Praia 1", "192.168.1.18")
+    monkeypatch.setattr(db, "CAMINHO_DB", tmp_path / "destino.db")
+    assert repositorio.importar_loggers(str(origem)) == 1
+    assert repositorio.importar_loggers(str(origem)) == 0
+    assert [l["sn"] for l in repositorio.listar_loggers()] == ["AP1"]
