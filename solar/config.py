@@ -8,11 +8,14 @@ if getattr(sys, "frozen", False):
     RAIZ = Path(sys.executable).resolve().parent
 else:
     RAIZ = Path(__file__).resolve().parent.parent
-PASTA_DADOS = RAIZ / "data"
+# Permite rodar pelo código usando a pasta de dados do executável já instalado (faturas, PDFs, backups).
+RAIZ_DADOS = Path(os.environ["SOLAR_RAIZ_DADOS"]) if os.getenv("SOLAR_RAIZ_DADOS") else RAIZ
+PASTA_DADOS = RAIZ_DADOS / "data"
 PASTA_PDFS = PASTA_DADOS / "pdfs"
 CAMINHO_DB = PASTA_DADOS / "solar.db"
 
 load_dotenv(RAIZ / ".env")
+load_dotenv(RAIZ_DADOS / ".env")
 
 DISTRIBUIDORA_ANEEL = "EQUATORIAL PA"
 ANEEL_URL = "https://dadosabertos.aneel.gov.br/api/3/action/datastore_search"
@@ -47,7 +50,7 @@ LIMIAR_ALERTA_GERACAO = 0.80
 # 50 bifásico, 100 trifásico. As unidades deste projeto são trifásicas.
 DISPONIBILIDADE_KWH = 100
 
-PASTA_BACKUP = RAIZ / "backups"
+PASTA_BACKUP = RAIZ_DADOS / "backups"
 BACKUPS_MANTIDOS = 12
 DIAS_ENTRE_BACKUPS_AUTOMATICOS = 7
 
