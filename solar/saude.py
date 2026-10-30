@@ -9,13 +9,15 @@ MESES_PARA_QUEDA_PERSISTENTE = 2
 
 
 def avaliar(df_geradoras: pd.DataFrame, performance_ratio: float) -> pd.DataFrame:
-    """A fatura só informa a energia injetada (sem o autoconsumo), então a razão contra a
-    NASA fica sempre abaixo de 100%. Por isso o alerta usa a razão relativa à mediana da usina."""
+    """A fatura só informa a energia injetada (sem o autoconsumo), então a razão contra a NASA fica sempre
+    abaixo de 100% e o alerta usa a razão relativa à mediana da usina (só dos meses medidos pela fatura).
+    Já a geração medida pelo logger é completa: vale a razão contra o esperado, sem comparar com histórico."""
     base = geracao.avaliar_geracao(df_geradoras, performance_ratio)
     if base.empty:
         return base
-    mediana = base.groupby("uc")["razao"].transform("median")
-    base["razao_relativa"] = base["razao"] / mediana
+    medido = base["fonte"] == "logger"
+    mediana = base["razao"].where(~medido).groupby(base["uc"]).transform("median")
+    base["razao_relativa"] = (base["razao"] / mediana).where(~medido, base["razao"])
     base["alerta"] = base["razao_relativa"] < LIMIAR_RELATIVO
     return base
 
