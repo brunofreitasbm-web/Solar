@@ -1,8 +1,10 @@
+from datetime import date
+
+import pandas as pd
 import pytest
 
-from solar import db
-from solar import alertas
-from solar.loggers import repositorio, strings
+from solar import alertas, db
+from solar.loggers import comparativo, repositorio, strings
 from solar.loggers.solplanet import FalhaLogger, interpretar
 
 BRUTO = {
@@ -15,6 +17,7 @@ BRUTO = {
 @pytest.fixture(autouse=True)
 def banco_temporario(tmp_path, monkeypatch):
     monkeypatch.setattr(db, "CAMINHO_DB", tmp_path / "teste.db")
+    monkeypatch.setattr(db, "CAMINHO_DB_LEITURAS", tmp_path / "leituras.db")
 
 
 def test_interpretar_converte_unidades():
@@ -83,3 +86,56 @@ def test_importar_loggers_de_outro_banco_nao_duplica(tmp_path, monkeypatch):
     assert repositorio.importar_loggers(str(origem)) == 1
     assert repositorio.importar_loggers(str(origem)) == 0
     assert [l["sn"] for l in repositorio.listar_loggers()] == ["AP1"]
+
+
+def _leitura_total(sn: str, quando: str, eto_kwh: float) -> None:
+    repositorio.gravar_leitura(sn, interpretar({**BRUTO, "tim": quando, "eto": int(eto_kwh * 10)}))
+
+
+def test_situacao_do_ciclo():
+    assert comparativo.situacao(900, 1000) == "ok"
+    assert comparativo.situacao(1040, 1000) == "ok"  # dentro da margem de alinhamento do ciclo
+    assert comparativo.situacao(1200, 1000) == "inconsistente"
+    assert comparativo.situacao(900, None) == "sem_dados"
+
+
+def test_geracao_do_periodo_usa_contador_dos_dois_inversores():
+    _leitura_total("A", "20260101170000", 1000)
+    _leitura_total("A", "20260131170000", 1400)
+    _leitura_total("B", "20260101170000", 500)
+    _leitura_total("B", "20260131170000", 800)
+    assert comparativo.geracao_no_periodo(["A", "B"], date(2026, 1, 1), date(2026, 1, 31)) == 700
+
+
+def test_geracao_do_periodo_sem_marco_numa_ponta_devolve_none():
+    _leitura_total("A", "20260101170000", 1000)
+    assert comparativo.geracao_no_periodo(["A"], date(2026, 1, 1), date(2026, 1, 31)) is None
+    assert comparativo.geracao_no_periodo([], date(2026, 1, 1), date(2026, 1, 31)) is None
+
+
+def test_geracao_do_periodo_ignora_contador_que_voltou_a_zero():
+    _leitura_total("A", "20260101170000", 1000)
+    _leitura_total("A", "20260131170000", 5)
+    assert comparativo.geracao_no_periodo(["A"], date(2026, 1, 1), date(2026, 1, 31)) is None
+
+
+def test_ciclos_da_unidade_comparam_com_a_fatura():
+    repositorio.cadastrar_logger("A", "Inv 1", "192.168.1.17", uc="UC1")
+    _leitura_total("A", "20260110170000", 1000)
+    _leitura_total("A", "20260209170000", 1900)
+    faturas = pd.DataFrame([
+        {"uc": "UC1", "mes_ref": "2026-01", "emissao": "2026-01-10", "injetado_kwh": 800.0},
+        {"uc": "UC1", "mes_ref": "2026-02", "emissao": "2026-02-09", "injetado_kwh": 700.0},
+        {"uc": "OUTRA", "mes_ref": "2026-02", "emissao": "2026-02-09", "injetado_kwh": 1.0},
+    ])
+    (ciclo,) = comparativo.ciclos_da_unidade("UC1", faturas)
+    assert (ciclo.mes_ref, ciclo.geracao_kwh, ciclo.injetado_kwh) == ("2026-02", 900, 700)
+    assert ciclo.situacao == "ok" and ciclo.autoconsumo_kwh == 200
+
+
+def test_ciclo_com_intervalo_absurdo_e_descartado():
+    faturas = pd.DataFrame([
+        {"uc": "UC1", "mes_ref": "2026-01", "emissao": "2026-01-10", "injetado_kwh": 800.0},
+        {"uc": "UC1", "mes_ref": "2026-05", "emissao": "2026-05-10", "injetado_kwh": 700.0},
+    ])
+    assert comparativo.ciclos_da_unidade("UC1", faturas) == []

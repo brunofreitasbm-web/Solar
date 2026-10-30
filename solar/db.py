@@ -3,7 +3,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-from solar.config import CAMINHO_DB
+from solar.config import CAMINHO_DB, CAMINHO_DB_LEITURAS
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS unidades (
@@ -76,8 +76,37 @@ CREATE TABLE IF NOT EXISTS loggers (
     sn TEXT PRIMARY KEY,
     nome TEXT NOT NULL,
     ip TEXT NOT NULL,
-    porta INTEGER NOT NULL DEFAULT 8484
+    porta INTEGER NOT NULL DEFAULT 8484,
+    uc TEXT
 );
+"""
+
+# Colunas acrescentadas depois da primeira versão — aplicadas por migração, sem apagar dados.
+COLUNAS_FATURAS_NOVAS = (
+    ("vencimento", "TEXT"), ("emissao", "TEXT"), ("proxima_leitura", "TEXT"),
+    ("consumo_rs", "REAL"), ("fio_b_rs", "REAL"), ("beneficio_rs", "REAL"),
+    ("bandeira_rs", "REAL"), ("cip_rs", "REAL"), ("multa_rs", "REAL"),
+    ("juros_rs", "REAL"), ("outros_rs", "REAL"), ("rateio_json", "TEXT"),
+    ("pix_copia_cola", "TEXT"), ("codigo_barras", "TEXT"),
+    ("pago_em", "TEXT"), ("valor_pago", "REAL"),
+)
+
+
+def _migrar(con: sqlite3.Connection) -> None:
+    if "uc" not in {l["name"] for l in con.execute("PRAGMA table_info(loggers)")}:
+        con.execute("ALTER TABLE loggers ADD COLUMN uc TEXT")
+    existentes = {l["name"] for l in con.execute("PRAGMA table_info(faturas)")}
+    for nome, tipo in COLUNAS_FATURAS_NOVAS:
+        if nome not in existentes:
+            con.execute(f"ALTER TABLE faturas ADD COLUMN {nome} {tipo}")
+    con.execute(
+        """UPDATE unidades SET data_pedido_conexao =
+           substr(data_pedido_conexao, 1, 4) || '-' || substr(data_pedido_conexao, 5, 2) || '-' || substr(data_pedido_conexao, 7, 2)
+           WHERE data_pedido_conexao GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'"""
+    )
+
+
+SCHEMA_LEITURAS = """
 CREATE TABLE IF NOT EXISTS leituras_logger (
     sn TEXT NOT NULL,
     lida_em TEXT NOT NULL,
@@ -94,34 +123,18 @@ CREATE TABLE IF NOT EXISTS leituras_logger (
 );
 """
 
-# Colunas acrescentadas depois da primeira versão — aplicadas por migração, sem apagar dados.
-COLUNAS_FATURAS_NOVAS = (
-    ("vencimento", "TEXT"), ("emissao", "TEXT"), ("proxima_leitura", "TEXT"),
-    ("consumo_rs", "REAL"), ("fio_b_rs", "REAL"), ("beneficio_rs", "REAL"),
-    ("bandeira_rs", "REAL"), ("cip_rs", "REAL"), ("multa_rs", "REAL"),
-    ("juros_rs", "REAL"), ("outros_rs", "REAL"), ("rateio_json", "TEXT"),
-    ("pix_copia_cola", "TEXT"), ("codigo_barras", "TEXT"),
-    ("pago_em", "TEXT"), ("valor_pago", "REAL"),
-)
 
-
-COLUNAS_LEITURAS_NOVAS = (("tensoes_pv_json", "TEXT"), ("correntes_pv_json", "TEXT"))
-
-
-def _migrar(con: sqlite3.Connection) -> None:
-    leituras = {l["name"] for l in con.execute("PRAGMA table_info(leituras_logger)")}
-    for nome, tipo in COLUNAS_LEITURAS_NOVAS:
-        if nome not in leituras:
-            con.execute(f"ALTER TABLE leituras_logger ADD COLUMN {nome} {tipo}")
-    existentes = {l["name"] for l in con.execute("PRAGMA table_info(faturas)")}
-    for nome, tipo in COLUNAS_FATURAS_NOVAS:
-        if nome not in existentes:
-            con.execute(f"ALTER TABLE faturas ADD COLUMN {nome} {tipo}")
-    con.execute(
-        """UPDATE unidades SET data_pedido_conexao =
-           substr(data_pedido_conexao, 1, 4) || '-' || substr(data_pedido_conexao, 5, 2) || '-' || substr(data_pedido_conexao, 7, 2)
-           WHERE data_pedido_conexao GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'"""
-    )
+@contextmanager
+def conexao_leituras():
+    CAMINHO_DB_LEITURAS.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(CAMINHO_DB_LEITURAS)
+    con.row_factory = sqlite3.Row
+    try:
+        con.executescript(SCHEMA_LEITURAS)
+        yield con
+        con.commit()
+    finally:
+        con.close()
 
 
 @contextmanager

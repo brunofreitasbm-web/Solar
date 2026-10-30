@@ -4,18 +4,30 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from paginas import ui
-from solar.loggers import coleta, repositorio, strings
+from paginas import painel_dados, ui
+from solar.loggers import coleta, comparativo, repositorio, strings
 
 MINUTOS_ONLINE = 15
 DIAS_HISTORICO = 30
+SITUACAO_CICLO = {
+    "ok": "Coerente",
+    "inconsistente": ":red[Injetado maior que o gerado]",
+    "sem_dados": "Sem leituras do logger nas datas do ciclo",
+}
+
+
+def _unidades_geradoras(p: painel_dados.Painel | None) -> dict[str, str]:
+    if p is None:
+        return {}
+    ucs = p.df[p.df["geradora"] == 1]["uc"].unique()
+    return {uc: p.nomes.get(uc, uc) for uc in ucs}
 
 
 def _minutos_desde(lida_em: str) -> float:
     return (datetime.now() - datetime.fromisoformat(lida_em)).total_seconds() / 60
 
 
-def _formulario_novo() -> None:
+def _formulario_novo(unidades: dict[str, str]) -> None:
     with st.expander("Adicionar data logger", expanded=not repositorio.listar_loggers(), icon=":material/add:"):
         with st.form("novo_logger", clear_on_submit=True):
             c1, c2 = st.columns(2)
@@ -26,11 +38,13 @@ def _formulario_novo() -> None:
             ip = c3.text_input("Endereço IP do logger", placeholder="192.168.0.50",
                                help="Veja na lista de dispositivos do roteador. Deixe o IP fixo para ele não mudar.")
             porta = c4.number_input("Porta", value=8484, min_value=1, max_value=65535)
+            uc = st.selectbox("Unidade geradora (para comparar com a fatura)", [None, *unidades],
+                              format_func=lambda u: "Escolher depois" if u is None else unidades[u])
             if st.form_submit_button("Salvar logger", icon=":material/save:", type="primary"):
                 if not (nome.strip() and sn.strip() and ip.strip()):
                     st.error("Preencha nome, número de série e IP.")
                 else:
-                    repositorio.cadastrar_logger(sn.strip(), nome.strip(), ip.strip(), int(porta))
+                    repositorio.cadastrar_logger(sn.strip(), nome.strip(), ip.strip(), int(porta), uc)
                     ui.avisar(f"Logger '{nome.strip()}' salvo. A primeira leitura chega em até 5 minutos.")
                     st.rerun()
 
@@ -48,7 +62,18 @@ def _strings(logger: dict, leitura: dict) -> None:
         st.error(f"A string {nomes} está sem tensão com o inversor gerando. Confira conectores e disjuntores dos painéis.")
 
 
-def _cartao(logger: dict) -> None:
+def _vinculo(logger: dict, unidades: dict[str, str]) -> None:
+    opcoes = [None, *unidades]
+    atual = logger["uc"] if logger["uc"] in opcoes else None
+    escolhida = st.selectbox("Unidade geradora", opcoes, index=opcoes.index(atual), key=f"uc_{logger['sn']}",
+                             format_func=lambda u: "Sem vínculo" if u is None else unidades[u])
+    if escolhida != atual:
+        repositorio.vincular_unidade(logger["sn"], escolhida)
+        ui.avisar("Vínculo salvo.")
+        st.rerun()
+
+
+def _cartao(logger: dict, unidades: dict[str, str]) -> None:
     leitura = repositorio.ultima_leitura(logger["sn"])
     with st.container(border=True):
         st.markdown(f"**{logger['nome']}** · `{logger['ip']}`")
@@ -70,6 +95,7 @@ def _cartao(logger: dict) -> None:
             _strings(logger, leitura)
             if leitura["codigo_erro"]:
                 st.error(f"O inversor reportou o código de erro {leitura['codigo_erro']}. Veja o manual da Solplanet.")
+        _vinculo(logger, unidades)
         ui.botao_excluir("Remover logger", f"Remover **{logger['nome']}** e todo o histórico de leituras dele?",
                          lambda: repositorio.remover_logger(logger["sn"]), "Logger removido.", f"rm_{logger['sn']}")
 
@@ -104,6 +130,35 @@ def _historico(loggers: list[dict]) -> None:
     st.caption(f"Total nos últimos {DIAS_HISTORICO} dias: {df['kwh'].sum():,.0f} kWh".replace(",", "."))
 
 
+def _comparativo(loggers: list[dict], p: painel_dados.Painel | None, unidades: dict[str, str]) -> None:
+    st.subheader("Comparativo com a Equatorial")
+    vinculadas = [uc for uc in unidades if any(l["uc"] == uc for l in loggers)]
+    if p is None or not vinculadas:
+        st.info("Vincule os loggers a uma unidade geradora (no cartão de cada um) para comparar com as faturas.")
+        return
+    st.caption("Geração medida pelos inversores no intervalo entre duas leituras do medidor, contra a energia injetada "
+               "que a Equatorial faturou. O injetado é menor que o gerado porque parte da energia é consumida no local; "
+               "a diferença é o autoconsumo estimado. A margem de erro é de cerca de um dia de geração por ciclo.")
+    for uc in vinculadas:
+        ciclos = comparativo.ciclos_da_unidade(uc, p.df)
+        st.markdown(f"**{unidades[uc]}**")
+        if not ciclos:
+            st.caption("Ainda não há dois ciclos de fatura com data de emissão para comparar. Envie as faturas em PDF.")
+            continue
+        tabela = pd.DataFrame([{
+            "Fatura": c.mes_ref,
+            "Ciclo": f"{c.inicio:%d/%m} a {c.fim:%d/%m}",
+            "Gerado (logger, kWh)": None if c.geracao_kwh is None else round(c.geracao_kwh),
+            "Injetado (Equatorial, kWh)": round(c.injetado_kwh),
+            "Autoconsumo estimado (kWh)": None if c.autoconsumo_kwh is None else round(c.autoconsumo_kwh),
+            "Situação": SITUACAO_CICLO[c.situacao],
+        } for c in ciclos])
+        st.dataframe(tabela, hide_index=True, width="stretch")
+        if any(c.situacao == "inconsistente" for c in ciclos):
+            st.warning("Em algum ciclo a Equatorial faturou mais energia injetada do que os inversores geraram. "
+                       "Confira se os loggers cobrem toda a usina e se o contador do inversor não foi zerado.")
+
+
 def _coletar_agora() -> None:
     with st.spinner("Consultando os loggers..."):
         resultado = coleta.coletar_todos()
@@ -120,7 +175,9 @@ def render() -> None:
     st.caption("Geração real lida direto dos inversores Solplanet, sem depender do aplicativo. "
                "A coleta é automática a cada 5 minutos enquanto o app estiver aberto.")
     loggers = repositorio.listar_loggers()
-    _formulario_novo()
+    painel = painel_dados.carregar()
+    unidades = _unidades_geradoras(painel)
+    _formulario_novo(unidades)
     if not loggers:
         return
 
@@ -129,7 +186,7 @@ def render() -> None:
 
     for coluna, logger in zip(st.columns(min(len(loggers), 3)), loggers):
         with coluna:
-            _cartao(logger)
+            _cartao(logger, unidades)
 
     st.subheader("Potência ao longo do dia")
     dia = st.date_input("Dia", value=date.today(), max_value=date.today(), format="DD/MM/YYYY")
@@ -137,3 +194,5 @@ def render() -> None:
 
     st.subheader("Geração por dia")
     _historico(loggers)
+
+    _comparativo(loggers, painel, unidades)
