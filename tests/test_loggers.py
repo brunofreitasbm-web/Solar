@@ -1,6 +1,7 @@
 import pytest
 
 from solar import db
+from solar import alertas
 from solar.loggers import repositorio, strings
 from solar.loggers.solplanet import FalhaLogger, interpretar
 
@@ -61,3 +62,14 @@ def test_historico_guarda_maior_tensao_por_string():
     repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "vpv": [3000, 100]}))
     repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "tim": "20261030160000", "vpv": [2000, 3500]}))
     assert repositorio.maior_tensao_por_string("AP1", 3650) == [300.0, 350.0]
+
+
+def test_alerta_de_string_aparece_na_central_de_alertas():
+    from datetime import datetime, timedelta
+    agora = datetime.now().strftime("%Y%m%d%H%M%S")
+    ontem = (datetime.now() - timedelta(days=1)).strftime("%Y%m%d%H%M%S")
+    repositorio.cadastrar_logger("AP1", "Praia 1", "192.168.1.18")
+    repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "tim": ontem, "vpv": [3000, 3000], "ipv": [1, 1]}))
+    repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "tim": agora, "vpv": [3000, 40], "ipv": [190, 0]}))
+    lista = alertas.de_loggers()
+    assert len(lista) == 1 and "string 2" in lista[0].texto and lista[0].gravidade == "erro"

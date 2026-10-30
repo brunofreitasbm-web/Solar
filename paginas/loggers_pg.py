@@ -35,11 +35,11 @@ def _formulario_novo() -> None:
                     st.rerun()
 
 
-def _strings(logger: dict, leitura: dict, minutos: float) -> None:
+def _strings(logger: dict, leitura: dict) -> None:
     tensoes, correntes = leitura["tensoes_pv_v"], leitura["correntes_pv_a"]
     if not tensoes:
         return
-    em_falha = strings.strings_em_falha(logger["sn"], leitura) if minutos <= strings.MINUTOS_LEITURA_VALIDA else []
+    em_falha = strings.strings_em_falha(logger["sn"], leitura)
     for i, (v, a) in enumerate(zip(tensoes, correntes), start=1):
         texto = f"String {i}: {v:.0f} V · {a:.2f} A"
         st.caption(f":red[:material/error: {texto}]" if i - 1 in em_falha else texto)
@@ -67,7 +67,7 @@ def _cartao(logger: dict) -> None:
             c3, c4 = st.columns(2)
             c3.metric("Total acumulado", f"{leitura['energia_total_kwh']:,.0f} kWh".replace(",", "."))
             c4.metric("Temperatura", f"{leitura['temperatura_c']:.0f} °C")
-            _strings(logger, leitura, minutos)
+            _strings(logger, leitura)
             if leitura["codigo_erro"]:
                 st.error(f"O inversor reportou o código de erro {leitura['codigo_erro']}. Veja o manual da Solplanet.")
         ui.botao_excluir("Remover logger", f"Remover **{logger['nome']}** e todo o histórico de leituras dele?",

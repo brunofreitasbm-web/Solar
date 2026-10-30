@@ -59,5 +59,7 @@ def carregar() -> Painel | None:
 def alertas_atuais(p: Painel | None) -> list[alertas.Alerta]:
     em_revisao = fila.contar()
     if p is None:
-        return alertas.reunir(repositorio.tabela().iloc[0:0], {}, 0.0, em_revisao)
-    return alertas.reunir(p.df, p.nomes, p.cfg.performance_ratio, em_revisao)
+        faturas = alertas.reunir(repositorio.tabela().iloc[0:0], {}, 0.0, em_revisao)
+    else:
+        faturas = alertas.reunir(p.df, p.nomes, p.cfg.performance_ratio, em_revisao)
+    return alertas.de_loggers() + faturas
