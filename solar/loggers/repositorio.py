@@ -35,3 +35,26 @@ def geracao_diaria(sn: str) -> list[dict]:
             (sn,),
         )
         return [dict(l) for l in linhas]
+
+
+def remover_logger(sn: str) -> None:
+    with conexao() as con:
+        con.execute("DELETE FROM leituras_logger WHERE sn = ?", (sn,))
+        con.execute("DELETE FROM loggers WHERE sn = ?", (sn,))
+
+
+def ultima_leitura(sn: str) -> dict | None:
+    with conexao() as con:
+        linha = con.execute(
+            "SELECT * FROM leituras_logger WHERE sn = ? ORDER BY lida_em DESC LIMIT 1", (sn,)
+        ).fetchone()
+    return dict(linha) if linha else None
+
+
+def curva_do_dia(sn: str, dia: str) -> list[dict]:
+    with conexao() as con:
+        linhas = con.execute(
+            "SELECT lida_em, potencia_w FROM leituras_logger WHERE sn = ? AND substr(lida_em, 1, 10) = ? ORDER BY lida_em",
+            (sn, dia),
+        )
+        return [dict(l) for l in linhas]
