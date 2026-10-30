@@ -15,6 +15,11 @@ def cadastrar_logger(sn: str, nome: str, ip: str, porta: int = 8484, uc: str | N
         )
 
 
+def atualizar_ip(sn: str, ip: str) -> None:
+    with conexao() as con:
+        con.execute("UPDATE loggers SET ip = ? WHERE sn = ?", (ip, sn))
+
+
 def vincular_unidade(sn: str, uc: str | None) -> None:
     with conexao() as con:
         con.execute("UPDATE loggers SET uc = ? WHERE sn = ?", (uc, sn))
