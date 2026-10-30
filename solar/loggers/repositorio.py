@@ -1,3 +1,6 @@
+import json
+from datetime import datetime, timedelta
+
 from solar.db import conexao
 from solar.loggers.solplanet import Leitura
 
@@ -19,10 +22,11 @@ def gravar_leitura(sn: str, leitura: Leitura) -> None:
         con.execute(
             """INSERT OR IGNORE INTO leituras_logger
                (sn, lida_em, potencia_w, energia_dia_kwh, energia_total_kwh,
-                temperatura_c, tensao_ac_v, frequencia_hz, codigo_erro)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                temperatura_c, tensao_ac_v, frequencia_hz, codigo_erro, tensoes_pv_json, correntes_pv_json)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (sn, leitura.lida_em, leitura.potencia_w, leitura.energia_dia_kwh, leitura.energia_total_kwh,
-             leitura.temperatura_c, leitura.tensao_ac_v, leitura.frequencia_hz, leitura.codigo_erro),
+             leitura.temperatura_c, leitura.tensao_ac_v, leitura.frequencia_hz, leitura.codigo_erro,
+             json.dumps(leitura.tensoes_pv_v), json.dumps(leitura.correntes_pv_a)),
         )
 
 
@@ -48,7 +52,12 @@ def ultima_leitura(sn: str) -> dict | None:
         linha = con.execute(
             "SELECT * FROM leituras_logger WHERE sn = ? ORDER BY lida_em DESC LIMIT 1", (sn,)
         ).fetchone()
-    return dict(linha) if linha else None
+    if not linha:
+        return None
+    leitura = dict(linha)
+    leitura["tensoes_pv_v"] = json.loads(leitura.pop("tensoes_pv_json") or "[]")
+    leitura["correntes_pv_a"] = json.loads(leitura.pop("correntes_pv_json") or "[]")
+    return leitura
 
 
 def curva_do_dia(sn: str, dia: str) -> list[dict]:
@@ -58,3 +67,21 @@ def curva_do_dia(sn: str, dia: str) -> list[dict]:
             (sn, dia),
         )
         return [dict(l) for l in linhas]
+
+
+def maior_tensao_por_string(sn: str, dias: int) -> list[float]:
+    """Maior tensão já lida em cada string nos últimos `dias` — mostra quais strings já estiveram em uso."""
+    desde = (datetime.now() - timedelta(days=dias)).isoformat(timespec="seconds")
+    with conexao() as con:
+        linhas = con.execute(
+            "SELECT tensoes_pv_json FROM leituras_logger WHERE sn = ? AND lida_em >= ? AND tensoes_pv_json IS NOT NULL",
+            (sn, desde),
+        ).fetchall()
+    maiores: list[float] = []
+    for linha in linhas:
+        for i, v in enumerate(json.loads(linha["tensoes_pv_json"])):
+            if i >= len(maiores):
+                maiores.append(v)
+            else:
+                maiores[i] = max(maiores[i], v)
+    return maiores

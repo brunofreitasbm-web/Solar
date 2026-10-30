@@ -1,7 +1,7 @@
 import pytest
 
 from solar import db
-from solar.loggers import repositorio
+from solar.loggers import repositorio, strings
 from solar.loggers.solplanet import FalhaLogger, interpretar
 
 BRUTO = {
@@ -37,3 +37,27 @@ def test_gravar_leitura_nao_duplica_e_agrega_por_dia():
     repositorio.gravar_leitura("AP1", interpretar(BRUTO))
     repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "tim": "20261030170000", "etd": 520}))
     assert repositorio.geracao_diaria("AP1") == [{"dia": "2026-10-30", "kwh": 52.0}]
+
+
+def test_interpretar_le_tensao_e_corrente_das_strings():
+    leitura = interpretar(BRUTO)
+    assert leitura.tensoes_pv_v == (270.4, 281.3, 290.2)
+    assert leitura.correntes_pv_a == (1.91, 1.91, 1.94)
+
+
+def test_string_que_funcionava_e_caiu_gera_alerta():
+    assert strings.indices_em_falha([386.4, 5.3, 402.1], [390.0, 380.0, 405.0], 1681) == [1]
+
+
+def test_string_que_nunca_teve_painel_nao_alerta():
+    assert strings.indices_em_falha([386.4, 5.3, 402.1], [390.0, 6.0, 405.0], 1681) == []
+
+
+def test_sem_geracao_relevante_nao_alerta():
+    assert strings.indices_em_falha([2.0, 1.0], [390.0, 380.0], 80) == []
+
+
+def test_historico_guarda_maior_tensao_por_string():
+    repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "vpv": [3000, 100]}))
+    repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "tim": "20261030160000", "vpv": [2000, 3500]}))
+    assert repositorio.maior_tensao_por_string("AP1", 3650) == [300.0, 350.0]

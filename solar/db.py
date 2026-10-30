@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS leituras_logger (
     tensao_ac_v REAL,
     frequencia_hz REAL,
     codigo_erro INTEGER,
+    tensoes_pv_json TEXT,
+    correntes_pv_json TEXT,
     PRIMARY KEY (sn, lida_em)
 );
 """
@@ -103,7 +105,14 @@ COLUNAS_FATURAS_NOVAS = (
 )
 
 
+COLUNAS_LEITURAS_NOVAS = (("tensoes_pv_json", "TEXT"), ("correntes_pv_json", "TEXT"))
+
+
 def _migrar(con: sqlite3.Connection) -> None:
+    leituras = {l["name"] for l in con.execute("PRAGMA table_info(leituras_logger)")}
+    for nome, tipo in COLUNAS_LEITURAS_NOVAS:
+        if nome not in leituras:
+            con.execute(f"ALTER TABLE leituras_logger ADD COLUMN {nome} {tipo}")
     existentes = {l["name"] for l in con.execute("PRAGMA table_info(faturas)")}
     for nome, tipo in COLUNAS_FATURAS_NOVAS:
         if nome not in existentes:

@@ -23,6 +23,8 @@ class Leitura:
     tensao_ac_v: float
     frequencia_hz: float
     codigo_erro: int
+    tensoes_pv_v: tuple[float, ...]
+    correntes_pv_a: tuple[float, ...]
 
 
 def interpretar(bruto: dict) -> Leitura:
@@ -37,6 +39,8 @@ def interpretar(bruto: dict) -> Leitura:
             tensao_ac_v=bruto["vac"][0] / 10,
             frequencia_hz=bruto["fac"] / 100,
             codigo_erro=int(bruto["err"]),
+            tensoes_pv_v=tuple(v / 10 for v in bruto["vpv"]),
+            correntes_pv_a=tuple(i / 100 for i in bruto["ipv"]),
         )
     except (KeyError, IndexError, TypeError, ValueError) as erro:
         raise FalhaLogger("Resposta do logger em formato inesperado.") from erro
