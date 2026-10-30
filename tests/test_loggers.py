@@ -139,3 +139,46 @@ def test_ciclo_com_intervalo_absurdo_e_descartado():
         {"uc": "UC1", "mes_ref": "2026-05", "emissao": "2026-05-10", "injetado_kwh": 700.0},
     ])
     assert comparativo.ciclos_da_unidade("UC1", faturas) == []
+
+
+def _geradora(meses_injetado: list[tuple[str, str, float]]) -> pd.DataFrame:
+    return pd.DataFrame([{"uc": "UC1", "mes_ref": m, "emissao": e, "injetado_kwh": i, "lat": -1.0, "lon": -47.0, "kwp": 20.0,
+                          "geradora": True} for m, e, i in meses_injetado])
+
+
+@pytest.fixture
+def irradiacao_fixa(monkeypatch):
+    from solar import geracao
+    monkeypatch.setattr(geracao, "_irradiacao_mensal", lambda lat, lon: {f"{m:02d}": 5.0 for m in range(1, 13)})
+
+
+def test_alerta_usa_geracao_do_logger_quando_ha_ciclo_medido(irradiacao_fixa):
+    from solar import saude
+    repositorio.cadastrar_logger("A", "Inv 1", "192.168.1.17", uc="UC1")
+    _leitura_total("A", "20260910170000", 1000)
+    _leitura_total("A", "20261010170000", 1000 + 30 * 5 * 20 * 0.78)  # exatamente o esperado em 30 dias
+    df = _geradora([("2026-09", "2026-09-10", 500.0), ("2026-10", "2026-10-10", 900.0)])
+    av = saude.avaliar(df, 0.78).set_index("mes_ref")
+    assert av.loc["2026-10", "fonte"] == "logger" and av.loc["2026-09", "fonte"] == "fatura"
+    assert av.loc["2026-10", "razao"] == pytest.approx(1.0, rel=0.01)
+    assert not av.loc["2026-10", "alerta"]
+
+
+def test_logger_com_geracao_baixa_dispara_alerta_mesmo_sem_historico(irradiacao_fixa):
+    from solar import saude
+    repositorio.cadastrar_logger("A", "Inv 1", "192.168.1.17", uc="UC1")
+    _leitura_total("A", "20260910170000", 1000)
+    _leitura_total("A", "20261010170000", 1000 + 0.5 * 30 * 5 * 20 * 0.78)  # metade do esperado
+    df = _geradora([("2026-09", "2026-09-10", 300.0), ("2026-10", "2026-10-10", 290.0)])
+    av = saude.avaliar(df, 0.78).set_index("mes_ref")
+    assert av.loc["2026-10", "alerta"]
+
+
+def test_ciclo_inconsistente_do_logger_volta_para_a_fatura(irradiacao_fixa):
+    from solar import saude
+    repositorio.cadastrar_logger("A", "Inv 1", "192.168.1.17", uc="UC1")
+    _leitura_total("A", "20260910170000", 1000)
+    _leitura_total("A", "20261010170000", 1100)  # gerou 100, mas a Equatorial faturou 900 injetados
+    df = _geradora([("2026-09", "2026-09-10", 800.0), ("2026-10", "2026-10-10", 900.0)])
+    av = saude.avaliar(df, 0.78).set_index("mes_ref")
+    assert av.loc["2026-10", "fonte"] == "fatura"
