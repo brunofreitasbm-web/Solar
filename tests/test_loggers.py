@@ -182,3 +182,55 @@ def test_ciclo_inconsistente_do_logger_volta_para_a_fatura(irradiacao_fixa):
     df = _geradora([("2026-09", "2026-09-10", 800.0), ("2026-10", "2026-10-10", 900.0)])
     av = saude.avaliar(df, 0.78).set_index("mes_ref")
     assert av.loc["2026-10", "fonte"] == "fatura"
+
+
+def test_mesmo_inversor_pelo_contador():
+    from solar.loggers import descoberta
+    assert descoberta.eh_o_mesmo_inversor(32250.0, 32213.5)
+    assert not descoberta.eh_o_mesmo_inversor(29142.3, 32213.5)  # outro inversor, contador menor
+    assert not descoberta.eh_o_mesmo_inversor(35300.0, 32213.5)  # contador maior demais para ser o mesmo
+
+
+def test_localizar_escolhe_o_dongle_cujo_contador_continua(monkeypatch):
+    from solar.loggers import descoberta
+    contadores = {"192.168.1.30": 29142.3, "192.168.1.31": 32250.0}
+    monkeypatch.setattr(descoberta, "prefixo_rede_local", lambda: "192.168.1")
+    monkeypatch.setattr(descoberta, "hosts_com_porta", lambda prefixo, porta: ["192.168.1.17", *contadores])
+    monkeypatch.setattr(descoberta, "ler_inversor", lambda ip, sn, porta: interpretar({**BRUTO, "eto": int(contadores[ip] * 10)}))
+    assert descoberta.localizar("AP1", 32213.5, "192.168.1.17", 8484) == "192.168.1.31"
+
+
+def test_localizar_sem_rede_devolve_none(monkeypatch):
+    from solar.loggers import descoberta
+    monkeypatch.setattr(descoberta, "prefixo_rede_local", lambda: None)
+    assert descoberta.localizar("AP1", 1.0, "192.168.1.17", 8484) is None
+
+
+def test_coleta_atualiza_o_ip_quando_o_dongle_muda(monkeypatch):
+    from solar.loggers import coleta, descoberta
+    repositorio.cadastrar_logger("AP1", "Inv 1", "192.168.1.17")
+    repositorio.gravar_leitura("AP1", interpretar({**BRUTO, "tim": "20261030120000"}))
+
+    def ler(ip, sn, porta=8484):
+        if ip == "192.168.1.17":
+            raise FalhaLogger("fora do ar")
+        return interpretar({**BRUTO, "tim": "20261030130000"})
+
+    monkeypatch.setattr(coleta, "ler_inversor", ler)
+    monkeypatch.setattr(descoberta, "localizar", lambda *a: "192.168.1.40")
+    monkeypatch.setattr(coleta, "_ultima_busca", {})
+    assert coleta.coletar_todos() == {"Inv 1": None}
+    assert repositorio.listar_loggers()[0]["ip"] == "192.168.1.40"
+
+
+def test_coleta_nao_repete_a_varredura_em_seguida(monkeypatch):
+    from solar.loggers import coleta, descoberta
+    repositorio.cadastrar_logger("AP1", "Inv 1", "192.168.1.17")
+    repositorio.gravar_leitura("AP1", interpretar(BRUTO))
+    chamadas = []
+    monkeypatch.setattr(coleta, "ler_inversor", lambda *a: (_ for _ in ()).throw(FalhaLogger("fora do ar")))
+    monkeypatch.setattr(descoberta, "localizar", lambda *a: chamadas.append(1))
+    monkeypatch.setattr(coleta, "_ultima_busca", {})
+    coleta.coletar_todos()
+    coleta.coletar_todos()
+    assert len(chamadas) == 1

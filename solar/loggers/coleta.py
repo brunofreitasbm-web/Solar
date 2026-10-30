@@ -10,10 +10,29 @@ Uso:
 import argparse
 import time
 
-from solar.loggers import repositorio
+from solar.loggers import descoberta, repositorio
 from solar.loggers.solplanet import FalhaLogger, ler_inversor
 
 INTERVALO_S = 300
+INTERVALO_BUSCA_S = 1800  # a varredura é cara; à noite o inversor desliga e nada seria achado
+
+_ultima_busca: dict[str, float] = {}
+
+
+def _reencontrar(logger: dict):
+    """Se o dongle mudou de IP, acha o novo, grava e devolve a leitura; senão None."""
+    agora = time.monotonic()
+    if agora - _ultima_busca.get(logger["sn"], -INTERVALO_BUSCA_S) < INTERVALO_BUSCA_S:
+        return None
+    _ultima_busca[logger["sn"]] = agora
+    ultima = repositorio.ultima_leitura(logger["sn"])
+    if not ultima:
+        return None
+    novo_ip = descoberta.localizar(logger["sn"], ultima["energia_total_kwh"], logger["ip"], logger["porta"])
+    if not novo_ip:
+        return None
+    repositorio.atualizar_ip(logger["sn"], novo_ip)
+    return ler_inversor(novo_ip, logger["sn"], logger["porta"])
 
 
 def coletar_todos() -> dict[str, str | None]:
@@ -23,8 +42,13 @@ def coletar_todos() -> dict[str, str | None]:
         try:
             leitura = ler_inversor(logger["ip"], logger["sn"], logger["porta"])
         except FalhaLogger as erro:
-            resultado[logger["nome"]] = str(erro)
-            continue
+            try:
+                leitura = _reencontrar(logger)
+            except FalhaLogger:
+                leitura = None
+            if leitura is None:
+                resultado[logger["nome"]] = str(erro)
+                continue
         repositorio.gravar_leitura(logger["sn"], leitura)
         resultado[logger["nome"]] = None
     return resultado
