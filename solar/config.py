@@ -13,6 +13,8 @@ RAIZ_DADOS = Path(os.environ["SOLAR_RAIZ_DADOS"]) if os.getenv("SOLAR_RAIZ_DADOS
 PASTA_DADOS = RAIZ_DADOS / "data"
 PASTA_PDFS = PASTA_DADOS / "pdfs"
 CAMINHO_DB = PASTA_DADOS / "solar.db"
+# Leituras dos inversores em arquivo próprio: gravar a cada poucos minutos em solar.db invalidaria o cache do painel.
+CAMINHO_DB_LEITURAS = PASTA_DADOS / "loggers.db"
 
 load_dotenv(RAIZ / ".env")
 load_dotenv(RAIZ_DADOS / ".env")
