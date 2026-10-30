@@ -72,6 +72,24 @@ CREATE TABLE IF NOT EXISTS telegram_enviados (
     enviado_em TEXT NOT NULL,
     PRIMARY KEY (uc, mes_ref)
 );
+CREATE TABLE IF NOT EXISTS loggers (
+    sn TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    porta INTEGER NOT NULL DEFAULT 8484
+);
+CREATE TABLE IF NOT EXISTS leituras_logger (
+    sn TEXT NOT NULL,
+    lida_em TEXT NOT NULL,
+    potencia_w REAL,
+    energia_dia_kwh REAL,
+    energia_total_kwh REAL,
+    temperatura_c REAL,
+    tensao_ac_v REAL,
+    frequencia_hz REAL,
+    codigo_erro INTEGER,
+    PRIMARY KEY (sn, lida_em)
+);
 """
 
 # Colunas acrescentadas depois da primeira versão — aplicadas por migração, sem apagar dados.
