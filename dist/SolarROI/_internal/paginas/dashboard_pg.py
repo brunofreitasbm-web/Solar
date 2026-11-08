@@ -129,13 +129,16 @@ def _tabelas_creditos_e_geracao(p: painel_dados.Painel) -> None:
     if alertas.empty:
         return
     st.subheader("Geração real vs. esperada")
-    st.caption("A fatura mostra só a energia injetada na rede (sem o que a unidade consome na hora), por isso a % do esperado fica abaixo de 100%. O alerta compara cada usina com o próprio histórico.")
+    st.caption("Onde os loggers cobrem o ciclo da fatura, a geração é a medida pelo inversor e o alerta compara com o esperado. "
+               "Nos demais meses a fatura mostra só a energia injetada na rede (sem o que a unidade consome na hora), "
+               "por isso a % do esperado fica abaixo de 100% e o alerta compara a usina com o próprio histórico.")
     alertas = alertas.assign(razao_pct=alertas["razao"] * 100, relativa_pct=alertas["razao_relativa"] * 100)
     st.dataframe(
         alertas, width="stretch", hide_index=True,
-        column_order=["uc", "mes_ref", "geracao_real_kwh", "geracao_esperada_kwh", "razao_pct", "relativa_pct", "alerta"],
+        column_order=["uc", "mes_ref", "fonte", "geracao_real_kwh", "geracao_esperada_kwh", "razao_pct", "relativa_pct", "alerta"],
         column_config={
             "uc": st.column_config.TextColumn("UC"), "mes_ref": st.column_config.TextColumn("Mês"),
+            "fonte": st.column_config.TextColumn("Fonte", help="logger = medida pelo inversor; fatura = energia injetada."),
             "geracao_real_kwh": st.column_config.NumberColumn("Geração real", format="%.0f kWh"),
             "geracao_esperada_kwh": st.column_config.NumberColumn("Geração esperada", format="%.0f kWh"),
             "razao_pct": st.column_config.ProgressColumn("% do esperado", format="%.0f%%", min_value=0, max_value=120),

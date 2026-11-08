@@ -6,6 +6,7 @@ from datetime import date
 import pandas as pd
 
 from solar import anomalias, auditoria, creditos, pagamentos, saude, vencimentos
+from solar.loggers import repositorio as loggers, strings
 
 DIAS_DE_AVISO_VENCIMENTO = 7
 
@@ -68,3 +69,16 @@ def reunir(df: pd.DataFrame, nomes: dict[str, str], performance_ratio: float, em
         alertas.append(Alerta("aviso", f"Créditos perto de expirar em {_unidades(nomes, expirando['uc'].unique())}.",
                               "rateio-creditos", "Ajustar rateio"))
     return alertas
+
+
+def de_loggers() -> list[Alerta]:
+    """Strings sem tensão nos inversores monitorados."""
+    resultado: list[Alerta] = []
+    for logger in loggers.listar_loggers():
+        leitura = loggers.ultima_leitura(logger["sn"])
+        falhas = strings.strings_em_falha(logger["sn"], leitura) if leitura else []
+        if falhas:
+            numeros = ", ".join(str(i + 1) for i in falhas)
+            resultado.append(Alerta("erro", f"{logger['nome']}: string {numeros} sem tensão com o inversor gerando.",
+                                    "geracao-loggers", "Ver loggers"))
+    return resultado

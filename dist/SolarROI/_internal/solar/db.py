@@ -3,7 +3,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import datetime
 
-from solar.config import CAMINHO_DB
+from solar.config import CAMINHO_DB, CAMINHO_DB_LEITURAS
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS unidades (
@@ -72,6 +72,13 @@ CREATE TABLE IF NOT EXISTS telegram_enviados (
     enviado_em TEXT NOT NULL,
     PRIMARY KEY (uc, mes_ref)
 );
+CREATE TABLE IF NOT EXISTS loggers (
+    sn TEXT PRIMARY KEY,
+    nome TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    porta INTEGER NOT NULL DEFAULT 8484,
+    uc TEXT
+);
 """
 
 # Colunas acrescentadas depois da primeira versão — aplicadas por migração, sem apagar dados.
@@ -86,6 +93,8 @@ COLUNAS_FATURAS_NOVAS = (
 
 
 def _migrar(con: sqlite3.Connection) -> None:
+    if "uc" not in {l["name"] for l in con.execute("PRAGMA table_info(loggers)")}:
+        con.execute("ALTER TABLE loggers ADD COLUMN uc TEXT")
     existentes = {l["name"] for l in con.execute("PRAGMA table_info(faturas)")}
     for nome, tipo in COLUNAS_FATURAS_NOVAS:
         if nome not in existentes:
@@ -95,6 +104,37 @@ def _migrar(con: sqlite3.Connection) -> None:
            substr(data_pedido_conexao, 1, 4) || '-' || substr(data_pedido_conexao, 5, 2) || '-' || substr(data_pedido_conexao, 7, 2)
            WHERE data_pedido_conexao GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'"""
     )
+
+
+SCHEMA_LEITURAS = """
+CREATE TABLE IF NOT EXISTS leituras_logger (
+    sn TEXT NOT NULL,
+    lida_em TEXT NOT NULL,
+    potencia_w REAL,
+    energia_dia_kwh REAL,
+    energia_total_kwh REAL,
+    temperatura_c REAL,
+    tensao_ac_v REAL,
+    frequencia_hz REAL,
+    codigo_erro INTEGER,
+    tensoes_pv_json TEXT,
+    correntes_pv_json TEXT,
+    PRIMARY KEY (sn, lida_em)
+);
+"""
+
+
+@contextmanager
+def conexao_leituras():
+    CAMINHO_DB_LEITURAS.parent.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(CAMINHO_DB_LEITURAS)
+    con.row_factory = sqlite3.Row
+    try:
+        con.executescript(SCHEMA_LEITURAS)
+        yield con
+        con.commit()
+    finally:
+        con.close()
 
 
 @contextmanager

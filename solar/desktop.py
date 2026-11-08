@@ -162,6 +162,7 @@ def travar_instancia(dados: Path):
         return None
     return arquivo
 
+
 def navegador_chromium() -> Path | None:
     """Edge ou Chrome instalado: abre o app em janela própria, sem abas nem barra de endereço."""
     pastas = (os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)"), os.environ.get("LOCALAPPDATA"))

@@ -44,7 +44,12 @@ def test_gerar_relatorio_executivo_markdown():
 
 
 def test_salvar_e_obter_chave_deepseek(monkeypatch):
+    banco_temporario = db.CAMINHO_DB  # o fixture aponta para uma pasta temporária
     monkeypatch.undo()
+    monkeypatch.setattr(db, "CAMINHO_DB", banco_temporario)
+    # A chave do .env de quem roda os testes não pode decidir o resultado.
+    for variavel in ("DEEPSEEK_API_KEY", "GEMINI_API_KEY", "ANTHROPIC_API_KEY"):
+        monkeypatch.delenv(variavel, raising=False)
     cliente.salvar_chave("deepseek", "sk-teste-123")
     prov, chave = cliente.obter_chave_configurada()
     assert prov == "deepseek"

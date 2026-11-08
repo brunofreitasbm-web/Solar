@@ -4,6 +4,7 @@ import streamlit as st
 
 from paginas import navegacao, painel_dados, ui
 from solar import backup, configuracoes
+from solar.loggers import agendador
 
 ASSETS = Path(__file__).parent / "assets"
 
@@ -39,6 +40,7 @@ def _barra_lateral() -> None:
 
 
 _backup_automatico()
+agendador.iniciar()
 nav = st.navigation(navegacao.construir(), position="sidebar", expanded=True)
 _barra_lateral()
 ui.mostrar_avisos()

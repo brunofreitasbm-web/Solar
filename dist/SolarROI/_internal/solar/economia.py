@@ -19,9 +19,12 @@ def percentual_fio_b_ano(ano: int) -> float:
 
 def percentual_fio_b(mes_ref: str, data_pedido_conexao: str | None) -> float:
     """Usinas com pedido de conexão ANTES de 07/01/2023 ficam isentas do Fio B até 2045."""
-    if not data_pedido_conexao or data_pedido_conexao < config.DATA_CORTE_LEI_14300:
+    if pd.isna(data_pedido_conexao) or pd.isna(mes_ref):
         return 0.0
-    return percentual_fio_b_ano(int(mes_ref[:4]))
+    pedido = str(data_pedido_conexao).strip()
+    if not pedido or pedido < config.DATA_CORTE_LEI_14300:
+        return 0.0
+    return percentual_fio_b_ano(int(str(mes_ref)[:4]))
 
 
 def _tarifa_efetiva(df: pd.DataFrame, padrao: float) -> pd.Series:
@@ -35,8 +38,8 @@ def _tarifa_efetiva(df: pd.DataFrame, padrao: float) -> pd.Series:
 
 
 def economia_da_fatura(linha: pd.Series, tarifa_tusd_kwh: float) -> float:
-    compensado_kwh = linha["compensado_kwh"] or 0.0
-    if compensado_kwh <= 0:
+    compensado_kwh = linha["compensado_kwh"]
+    if pd.isna(compensado_kwh) or compensado_kwh <= 0:
         return 0.0
 
     if pd.notna(linha["fio_b_rs"]) or pd.notna(linha["beneficio_rs"]):
@@ -47,7 +50,8 @@ def economia_da_fatura(linha: pd.Series, tarifa_tusd_kwh: float) -> float:
         percentual = percentual_fio_b(linha["mes_ref"], linha["data_pedido_conexao"])
         remanescente = compensado_kwh * tarifa_tusd_kwh * percentual
 
-    return max(linha["valor_compensado_rs"] - remanescente, 0.0)
+    economia = linha["valor_compensado_rs"] - remanescente
+    return 0.0 if pd.isna(economia) else max(economia, 0.0)
 
 
 def tabela_economia(df_faturas: pd.DataFrame, tarifa_tusd_kwh: float, tarifa_padrao_kwh: float = 0.0) -> pd.DataFrame:
