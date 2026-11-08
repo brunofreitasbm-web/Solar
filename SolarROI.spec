@@ -79,7 +79,8 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=False,
-    console=True,
+    # Sem janela de console: o app abre como programa comum, não como "servidor".
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

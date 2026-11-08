@@ -27,5 +27,5 @@ if exist "dist\SolarROI\data\solar.db" (
     )
 )
 
-start "Solar ROI" /min ".venv\Scripts\python.exe" run_app.py
+start "Solar ROI" ".venv\Scripts\pythonw.exe" run_app.py
 exit

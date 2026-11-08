@@ -52,6 +52,17 @@ def test_sem_composicao_estima_fio_b_pela_regra_da_lei():
     assert round(_tabela(linha).loc[0, "economia_rs"], 2) == 98.95
 
 
+def test_unidade_sem_data_de_pedido_nao_quebra_a_estimativa():
+    # Unidade sem data no banco vira NaN no pandas; antes isso derrubava o painel inteiro.
+    linha = _fatura(fio_b_rs=None, beneficio_rs=None, compensado_kwh=100.0, tarifa_kwh=1.30,
+                    data_pedido_conexao=float("nan"))
+    assert round(_tabela(linha).loc[0, "economia_rs"], 2) == 130.0
+
+
+def test_compensacao_ausente_conta_como_zero():
+    assert _tabela(_fatura(compensado_kwh=float("nan"))).loc[0, "economia_rs"] == 0.0
+
+
 def test_resumo_mensal_soma_as_unidades():
     tabela = _tabela(_fatura(uc="1"), _fatura(uc="2"))
     resumo = resumo_mensal(tabela)
