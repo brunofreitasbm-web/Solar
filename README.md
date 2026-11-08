@@ -5,13 +5,27 @@ real das usinas, o ROI e o efeito do financiamento, e apoiar decisões (quitar, 
 
 ## Rodando
 
+Abra pelo atalho **Solar ROI** da Área de Trabalho (criado por `criar_atalho.bat`) ou clique em
+`dist\SolarROI\SolarROI.exe`. Ele abre como um programa comum: tela de abertura, janela do app e,
+ao fechar a janela, o servidor desliga sozinho. Clicar de novo com o app aberto só traz a janela
+de volta.
+
+Para rodar pelo código:
+
 ```
 .venv\Scripts\activate   # ou: python -m venv .venv && pip install -r requirements.txt
-streamlit run app.py
+python run_app.py
+```
+
+Para regerar o executável depois de mexer no código:
+
+```
+build_exe.bat
 ```
 
 Os dados ficam só no seu PC: `data/solar.db` e `data/pdfs/` (fora do git). Opcional:
 `ANTHROPIC_API_KEY` no `.env` ativa a leitura por IA para faturas que o parser não entende.
+Se algo der errado ao abrir, o motivo fica em `data/solar_app.log`.
 
 ## Páginas
 

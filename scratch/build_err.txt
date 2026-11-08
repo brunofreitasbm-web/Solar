@@ -1,0 +1,41 @@
+147 INFO: PyInstaller: 6.22.3, contrib hooks: 2026.9
+148 INFO: Python: 3.14.7
+176 INFO: Platform: Windows-11-10.0.26300-SP0
+177 INFO: Python environment: C:\Users\bruno\Documents\Projetos\Solar\.venv
+180 INFO: Removing temporary files and cleaning cache in C:\Users\bruno\AppData\Local\pyinstaller
+4766 INFO: Module search paths (PYTHONPATH):
+['C:\\Users\\bruno\\Documents\\Projetos\\Solar',
+ 'C:\\Users\\bruno\\AppData\\Local\\Python\\pythoncore-3.14-64\\python314.zip',
+ 'C:\\Users\\bruno\\AppData\\Local\\Python\\pythoncore-3.14-64\\DLLs',
+ 'C:\\Users\\bruno\\AppData\\Local\\Python\\pythoncore-3.14-64\\Lib',
+ 'C:\\Users\\bruno\\AppData\\Local\\Python\\pythoncore-3.14-64',
+ 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv',
+ 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages',
+ 'C:\\Users\\bruno\\Documents\\Projetos\\Solar']
+5216 INFO: Appending 'datas' from .spec
+5269 INFO: checking Analysis
+5270 INFO: Building Analysis because Analysis-00.toc is non existent
+5270 INFO: Looking for Python shared library...
+5270 INFO: Using Python shared library: C:\Users\bruno\AppData\Local\Python\pythoncore-3.14-64\python314.dll
+5270 INFO: Running Analysis Analysis-00.toc
+5271 INFO: Target bytecode optimization level: 0
+5271 INFO: Initializing module dependency graph...
+5273 INFO: Initializing module graph hook caches...
+5293 INFO: Analyzing modules for base_library.zip ...
+6168 INFO: Processing standard module hook 'hook-encodings.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+7908 INFO: Processing standard module hook 'hook-math.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10022 INFO: Processing standard module hook 'hook-difflib.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10053 INFO: Processing standard module hook 'hook-heapq.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+10230 INFO: Processing standard module hook 'hook-pickle.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+12603 INFO: Caching module dependency graph...
+12651 INFO: Analyzing C:\Users\bruno\Documents\Projetos\Solar\run_app.py
+12718 INFO: Processing standard module hook 'hook-multiprocessing.util.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+12902 INFO: Processing standard module hook 'hook-xml.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+13494 INFO: Processing standard module hook 'hook-sysconfig.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+13502 INFO: Processing standard module hook 'hook-_ctypes.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+13600 INFO: Processing standard module hook 'hook-webbrowser.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+14059 INFO: Processing standard module hook 'hook-platform.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+14957 INFO: Processing standard module hook 'hook-numpy.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+15485 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+15488 INFO: SetuptoolsInfo: initializing cached setuptools info...
+19817 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'

@@ -25,6 +25,9 @@ from string import Template
 
 log = logging.getLogger("solar.desktop")
 
+# Sem proxy: em rede corporativa um proxy configurado faria o health check de 127.0.0.1 falhar.
+_SEM_PROXY = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
 PORTA_PREFERIDA = 8501
 TENTATIVAS_DE_PORTA = 40
 ESPERA_SERVIDOR_S = 120
@@ -99,7 +102,7 @@ def porta_disponivel(porta: int) -> bool:
 
 def servidor_respondendo(porta: int, espera: float = 1.5) -> bool:
     try:
-        with urllib.request.urlopen(f"{url_app(porta)}/_stcore/health", timeout=espera) as resposta:
+        with _SEM_PROXY.open(f"{url_app(porta)}/_stcore/health", timeout=espera) as resposta:
             return resposta.status == 200
     except OSError:
         return False
@@ -129,11 +132,9 @@ def salvar_porta(dados: Path, porta: int) -> None:
 
 
 def app_aberto(dados: Path) -> int | None:
-    """Porta de um servidor do Solar ROI que já está no ar."""
-    for porta in (ler_porta_salva(dados), PORTA_PREFERIDA):
-        if porta and servidor_respondendo(porta):
-            return porta
-    return None
+    """Porta de um servidor do Solar ROI que já está no ar (só a porta que o app registrou)."""
+    porta = ler_porta_salva(dados)
+    return porta if porta and servidor_respondendo(porta) else None
 
 
 def escolher_porta(dados: Path, preferida: int = PORTA_PREFERIDA) -> int:
@@ -160,7 +161,6 @@ def travar_instancia(dados: Path):
         arquivo.close()
         return None
     return arquivo
-
 
 def navegador_chromium() -> Path | None:
     """Edge ou Chrome instalado: abre o app em janela própria, sem abas nem barra de endereço."""
