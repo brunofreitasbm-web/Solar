@@ -39,3 +39,24 @@
 15485 INFO: Processing pre-safe-import-module hook 'hook-typing_extensions.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
 15488 INFO: SetuptoolsInfo: initializing cached setuptools info...
 19817 INFO: Processing standard module hook 'hook-charset_normalizer.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+22162 INFO: Processing standard module hook 'hook-plotly.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+23241 INFO: Processing standard module hook 'hook-narwhals.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+23274 INFO: Processing standard module hook 'hook-pandas.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+25156 INFO: Processing standard module hook 'hook-zoneinfo.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+27846 INFO: Processing standard module hook 'hook-pandas.io.formats.style.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+29733 INFO: Processing standard module hook 'hook-pyarrow.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+30800 INFO: Processing standard module hook 'hook-urllib3.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\_pyinstaller_hooks_contrib\\stdhooks'
+31006 INFO: Processing pre-safe-import-module hook 'hook-backports.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+31008 INFO: Setuptools: 'backports' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.backports'!
+31024 INFO: Processing standard module hook 'hook-setuptools.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+31072 INFO: Processing pre-safe-import-module hook 'hook-distutils.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+31159 INFO: Processing pre-safe-import-module hook 'hook-jaraco.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+31160 INFO: Setuptools: 'jaraco' appears to be a full setuptools-vendored copy - creating alias to 'setuptools._vendor.jaraco'!
+31180 INFO: Processing pre-safe-import-module hook 'hook-more_itertools.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+31182 INFO: Setuptools: 'more_itertools' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.more_itertools'!
+31405 INFO: Processing standard module hook 'hook-_osx_support.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+31446 INFO: Processing pre-safe-import-module hook 'hook-packaging.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+31783 INFO: Processing standard module hook 'hook-setuptools._vendor.jaraco.text.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks'
+31786 INFO: Processing pre-safe-import-module hook 'hook-importlib_resources.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+32920 INFO: Processing pre-safe-import-module hook 'hook-tomli.py' from 'C:\\Users\\bruno\\Documents\\Projetos\\Solar\\.venv\\Lib\\site-packages\\PyInstaller\\hooks\\pre_safe_import_module'
+32921 INFO: Setuptools: 'tomli' appears to be a setuptools-vendored copy - creating alias to 'setuptools._vendor.tomli'!
