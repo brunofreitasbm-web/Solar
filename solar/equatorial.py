@@ -1,23 +1,23 @@
 import json
 import os
 import shutil
-import sqlite3
 import subprocess
 import time
 from pathlib import Path
 from typing import Callable
 
-from solar import config
+from solar import config, equatorial_portal as portal
+from solar.faturas.baixadas import FaturasConhecidas, nomes_no_banco
 from solar.faturas.extracao import ResultadoExtracao, extrair
 from solar.faturas.importacao import salvar_se_completa
 
 PASTA_PERFIL = config.PASTA_DADOS / "perfil_equatorial"
 PASTA_DOWNLOADS = config.PASTA_PDFS / "equatorial"
 ARQUIVO_SESSAO = PASTA_PERFIL / "sessao.json"
+ARQUIVO_CONTAS_BAIXADAS = PASTA_DOWNLOADS / "contas_baixadas.json"
 URL_AGENCIA = "https://agenciavirtual.equatorialenergia.com.br/Login/"
 URL_SEGUNDA_VIA = "https://agenciavirtual.equatorialenergia.com.br/SegundaVia/"
 URL_SSO = "https://auth.equatorialenergia.com.br/"
-LIMITE_DOWNLOADS = 20
 
 
 def _salvar_status_sessao(autenticado: bool) -> None:
@@ -234,6 +234,27 @@ def _obter_contexto(p, headless: bool = False):
 
 
 
+INTERVALO_RECHECAGEM_S = 8
+
+
+def _logou_por_cookie(context) -> bool:
+    """O Keycloak grava KEYCLOAK_SESSION assim que o usuário conclui o login, mesmo antes do redirecionamento."""
+    try:
+        return any(c["name"] == "KEYCLOAK_SESSION" and "equatorialenergia" in c["domain"] for c in context.cookies())
+    except Exception:
+        return False
+
+
+def _confirmar_na_segunda_via(page) -> bool:
+    """Abre a 2ª via: se o login valeu, a página carrega logada e a sessão passa a ser reconhecida."""
+    try:
+        page.goto(URL_SEGUNDA_VIA, timeout=30000)
+        page.wait_for_timeout(4000)
+        return esta_autenticado_na_pagina(page)
+    except Exception:
+        return False
+
+
 def abrir_sessao_login(callback_progresso: Callable[[str], None] | None = None) -> tuple[bool, str]:
     """Abre o navegador Chrome para o usuário se identificar na Equatorial.
     Monitora ativamente a tela e salva a sessão assim que o login for detectado."""
@@ -263,6 +284,7 @@ def abrir_sessao_login(callback_progresso: Callable[[str], None] | None = None) 
 
             _avisar("Aguardando seu login na janela aberta (via Google ou CPF/senha)...")
             inicio = time.time()
+            ultima_checagem = inicio
             logado = False
             while time.time() - inicio < 180:
                 paginas_vivas = [pg for pg in context.pages if not pg.is_closed()]
@@ -276,6 +298,13 @@ def abrir_sessao_login(callback_progresso: Callable[[str], None] | None = None) 
                     _avisar("Login reconhecido com sucesso! Memorizando sessão...")
                     time.sleep(2)
                     break
+                restante = int(180 - (time.time() - inicio))
+                _avisar(f"Aguardando seu login na janela aberta… ({restante}s restantes)")
+                if _logou_por_cookie(context) and time.time() - ultima_checagem > INTERVALO_RECHECAGEM_S:
+                    ultima_checagem = time.time()
+                    logado = _confirmar_na_segunda_via(page)
+                    if logado:
+                        break
                 time.sleep(1)
 
             _salvar_status_sessao(logado)
@@ -346,6 +375,65 @@ def _tratar_bloqueio_antirobo(page, headless: bool = False, callback_progresso: 
 def verificar_autenticado() -> bool:
     """Checa se a sessão salva ainda é válida no portal da Equatorial."""
     return tem_sessao_salva()
+
+
+def _baixar_clicando(page, gatilho, timeout_ms: int) -> tuple[bytes, str] | None:
+    try:
+        with page.expect_download(timeout=timeout_ms) as info:
+            gatilho.click(timeout=3000)
+        download = info.value
+        return Path(download.path()).read_bytes(), download.suggested_filename
+    except Exception:
+        return None
+
+
+def _baixar_unidade(page, unidade: str, conhecidas, arquivos, avisar) -> tuple[int, int]:
+    repetidas = falhas = 0
+    for texto, botao in portal.contas_da_unidade(page):
+        chave = portal.identificar_conta(unidade, texto)
+        if conhecidas.conta_ja_baixada(chave):
+            repetidas += 1
+            continue
+        baixado = _baixar_clicando(page, botao, portal.ESPERA_PDF_MS)
+        if baixado is None:
+            falhas += 1
+            continue
+        conteudo, nome = baixado
+        conhecidas.marcar_conta(chave)
+        if conhecidas.ja_existe(conteudo):
+            repetidas += 1
+            continue
+        caminho = _guardar_fatura(conhecidas, nome or f"fatura_equatorial_{int(time.time())}.pdf", conteudo)
+        arquivos.append(caminho)
+        avisar(f"Nova fatura: {caminho.name}")
+    return repetidas, falhas
+
+
+def _baixar_todas_as_unidades(page, conhecidas, arquivos, avisar) -> str:
+    total = portal.contar_unidades(page)
+    repetidas = falhas = 0
+    for i in range(total):
+        unidade, tem_contas = portal.abrir_unidade(page, i)
+        avisar(f"Unidade {i + 1} de {total}: {unidade[:60]}")
+        if not tem_contas:
+            continue
+        rep, fal = _baixar_unidade(page, unidade, conhecidas, arquivos, avisar)
+        repetidas += rep
+        falhas += fal
+    return f"{len(arquivos)} nova(s), {repetidas} já baixada(s) antes" + (f", {falhas} sem download." if falhas else ".")
+
+
+def _guardar_fatura(conhecidas: FaturasConhecidas, nome: str, conteudo: bytes) -> Path:
+    nome = conhecidas.nome_livre(nome)
+    caminho = PASTA_DOWNLOADS / nome
+    caminho.write_bytes(conteudo)
+    conhecidas.registrar(nome, conteudo)
+    try:
+        config.PASTA_GOOGLE_DRIVE.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(caminho, config.PASTA_GOOGLE_DRIVE / nome)
+    except OSError:
+        pass
+    return caminho
 
 
 def baixar_faturas_equatorial(
@@ -421,92 +509,9 @@ def baixar_faturas_equatorial(
                 page.wait_for_timeout(4000)
 
 
-            # Se houver lista de unidades consumidoras / contratos, avisa ou seleciona
-            cards_contrato = page.locator(".card-contrato, [data-testid*='contrato'], button:has-text('Acessar'), button:has-text('Selecionar')")
-            if cards_contrato.count() > 0 and cards_contrato.first.is_visible():
-                _avisar("Acessando unidade consumidora...")
-                try:
-                    cards_contrato.first.click(timeout=3000)
-                    page.wait_for_timeout(3000)
-                except Exception:
-                    pass
-
-            _avisar("Procurando faturas disponíveis para download...")
-            locators_fatura = page.locator(
-                "button:has-text('Baixar'), a:has-text('Baixar'), "
-                "button:has-text('PDF'), a:has-text('PDF'), "
-                "button:has-text('2ª Via'), a:has-text('2ª Via'), "
-                "button:has-text('Visualizar'), a:has-text('Visualizar'), "
-                "[title*='fatura'], [title*='Fatura'], "
-                "[aria-label*='Baixar'], [aria-label*='fatura'], [aria-label*='PDF'], "
-                ".btn-download, .download-fatura"
-            )
-            total_encontrados = locators_fatura.count()
-            _avisar(f"Localizados {total_encontrados} elemento(s) de download na página.")
-
-            falhas = 0
-            for i in range(min(total_encontrados, LIMITE_DOWNLOADS)):
-                try:
-                    el = locators_fatura.nth(i)
-                    if not el.is_visible():
-                        continue
-
-                    download_concluido = False
-                    # 1. Tentativa de download direto
-                    try:
-                        with page.expect_download(timeout=6000) as download_info:
-                            el.click(timeout=3000)
-                        download = download_info.value
-                        nome_arquivo = download.suggested_filename or f"fatura_equatorial_{int(time.time())}_{i}.pdf"
-                        caminho_final = PASTA_DOWNLOADS / nome_arquivo
-                        download.save_as(str(caminho_final))
-                        arquivos_baixados.append(caminho_final)
-                        _avisar(f"Baixado: {nome_arquivo}")
-                        download_concluido = True
-                    except Exception:
-                        pass
-
-                    # 2. Se abriu modal com botão de Baixar PDF
-                    if not download_concluido:
-                        btn_modal = page.locator("button:has-text('Baixar PDF'), a:has-text('Baixar PDF'), button:has-text('Download'), a:has-text('Download')").first
-                        if btn_modal.is_visible(timeout=2000):
-                            try:
-                                with page.expect_download(timeout=8000) as download_info:
-                                    btn_modal.click(timeout=3000)
-                                download = download_info.value
-                                nome_arquivo = download.suggested_filename or f"fatura_equatorial_{int(time.time())}_{i}.pdf"
-                                caminho_final = PASTA_DOWNLOADS / nome_arquivo
-                                download.save_as(str(caminho_final))
-                                arquivos_baixados.append(caminho_final)
-                                _avisar(f"Baixado: {nome_arquivo}")
-                                download_concluido = True
-                            except Exception:
-                                pass
-                            try:
-                                page.locator("button:has-text('Fechar'), .close, [aria-label='Close']").first.click(timeout=1000)
-                            except Exception:
-                                pass
-
-                    if not download_concluido:
-                        falhas += 1
-                    else:
-                        # Copia para o Google Drive local se configurado
-                        try:
-                            config.PASTA_GOOGLE_DRIVE.mkdir(parents=True, exist_ok=True)
-                            caminho_drive = config.PASTA_GOOGLE_DRIVE / nome_arquivo
-                            shutil.copy2(caminho_final, caminho_drive)
-                            _avisar(f"Sincronizado com Google Drive: {nome_arquivo}")
-                        except Exception as e_drive:
-                            _avisar(f"Aviso Google Drive: {e_drive}")
-                except Exception:
-                    falhas += 1
-
-            if not arquivos_baixados and total_encontrados == 0:
-                _avisar("Verificando histórico de faturas...")
-                page.wait_for_timeout(2000)
-
-            if falhas and arquivos_baixados:
-                _avisar(f"{falhas} elemento(s) não geraram download direto.")
+            conhecidas = FaturasConhecidas([PASTA_DOWNLOADS, config.PASTA_GOOGLE_DRIVE], ARQUIVO_CONTAS_BAIXADAS)
+            resumo = _baixar_todas_as_unidades(page, conhecidas, arquivos_baixados, _avisar)
+            _avisar(resumo)
         finally:
             try:
                 context.close()
@@ -528,15 +533,7 @@ def obter_arquivos_drive() -> tuple[list[Path], list[Path]]:
     if not todos_pdfs:
         return [], []
 
-    # Busca nomes de arquivos já importados no banco
-    arquivos_no_db: set[str] = set()
-    try:
-        with sqlite3.connect(config.CAMINHO_DB) as con:
-            for row in con.execute("SELECT arquivo FROM faturas WHERE arquivo != ''").fetchall():
-                if row[0]:
-                    arquivos_no_db.add(Path(row[0]).name)
-    except Exception:
-        pass
+    arquivos_no_db = nomes_no_banco()
 
     novos_pdfs = [p for p in todos_pdfs if p.name not in arquivos_no_db]
     return todos_pdfs, novos_pdfs
